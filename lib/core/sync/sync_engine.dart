@@ -65,7 +65,7 @@ const _syncTableOrder = [
   'categories_article',
   'articles',
   'services_hopital',
-  'utilisateurs',
+  'profils_utilisateurs',
   'bons_commande',
   'factures',
   'lignes_facture',
@@ -103,7 +103,6 @@ class SyncMetadata {
   static DateTime getLastPullTime() {
     final settings = _store.appSettings.getAll().firstOrNull;
     if (settings != null && settings.updatedAt.year > 2000) {
-      // On utilise updatedAt comme proxy pour lastPullTime
       return settings.updatedAt;
     }
     return DateTime.fromMillisecondsSinceEpoch(0);
@@ -124,10 +123,7 @@ class SyncMetadata {
 class SyncWorker {
   static final SyncWorker instance = SyncWorker._();
   SyncWorker._() {
-    // Écouter le bus → enqueue chaque événement CRUD
     SyncEventBus.instance.stream.listen(_enqueue);
-
-    // Réessayer les pending quand la connexion revient
     ConnectivityService.onlineStream.listen((online) {
       if (online) processQueue();
     });
@@ -137,7 +133,6 @@ class SyncWorker {
   final _log = Logger();
   bool _isProcessing = false;
 
-  // ── Enregistrer dans la queue persistante ──
   void _enqueue(SyncEvent event) {
     final item = SyncQueueEntity()
       ..operationId = const Uuid().v4()
@@ -154,7 +149,6 @@ class SyncWorker {
     processQueue();
   }
 
-  // ── Traiter la queue FIFO ──
   Future<void> processQueue() async {
     if (_isProcessing) return;
     if (!SupabaseConfigService.instance.isSupabaseReady) return;
@@ -171,8 +165,6 @@ class SyncWorker {
       for (final item in pending) {
         await _processItem(item);
       }
-
-      // Pull les changements des autres postes
       await _pullDelta();
     } catch (e) {
       _log.e('SyncWorker.processQueue error: $e');
@@ -193,7 +185,6 @@ class SyncWorker {
       switch (item.operation) {
         case 'insert':
         case 'update':
-          // Vérifier conflit avant upsert
           final conflict = await ConflictDetector.instance.check(
             tableName: item.tableName,
             uuid: item.recordUuid,
@@ -205,10 +196,11 @@ class SyncWorker {
             await ConflictDetector.instance.enqueue(conflict);
             item.status = 'conflict';
           } else {
+            // EXPERT: Augmentation du timeout pour les gros volumes (batch)
             await client
                 .from(item.tableName)
                 .upsert(payload, onConflict: 'uuid')
-                .timeout(const Duration(seconds: 15));
+                .timeout(const Duration(seconds: 45));
             item.status = 'done';
             item.pushedAt = DateTime.now();
           }
@@ -221,7 +213,7 @@ class SyncWorker {
                 'updated_at': DateTime.now().toIso8601String(),
               })
               .eq('uuid', item.recordUuid)
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 30));
           item.status = 'done';
           item.pushedAt = DateTime.now();
       }
@@ -235,11 +227,9 @@ class SyncWorker {
     _store.syncQueue.put(item);
   }
 
-  // ── Pull delta depuis Supabase ──
   Future<void> _pullDelta() async {
     final client = SupabaseConfigService.instance.client!;
-    final lastPull = SyncMetadata.getLastPullTime();
-    final since = lastPull.toIso8601String();
+    final since = SyncMetadata.getLastPullTime().toIso8601String();
 
     for (final table in _syncTableOrder) {
       try {
@@ -249,7 +239,7 @@ class SyncWorker {
             .gt('updated_at', since)
             .neq('device_id', DeviceInfoService.id)
             .order('updated_at')
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 45));
 
         if (rows.isNotEmpty) {
           PullMerger.merge(table, rows);
@@ -258,14 +248,11 @@ class SyncWorker {
         _log.w('Pull delta error ($table): $e');
       }
     }
-
     SyncMetadata.setLastPullTime(DateTime.now());
   }
 
-  // ── Forcer re-push de tout (après changement de Supabase) ──
   Future<void> triggerFullResync() async {
     _store.syncQueue.removeAll();
-    // Re-enqueue toutes les entités locales
     for (final table in _syncTableOrder) {
       _reEnqueueTable(table);
     }
@@ -293,7 +280,7 @@ class SyncWorker {
     return switch (table) {
       'fournisseurs' => _store.fournisseurs.getAll().map((e) => e.toSupabaseMap()).toList(),
       'articles' => _store.articles.getAll().map((e) => e.toSupabaseMap()).toList(),
-      'utilisateurs' => _store.utilisateurs.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'profils_utilisateurs' => _store.utilisateurs.getAll().map((e) => e.toSupabaseMap()).toList(),
       'categories_article' => _store.categories.getAll().map((e) => e.toSupabaseMap()).toList(),
       'services_hopital' => _store.services.getAll().map((e) => e.toSupabaseMap()).toList(),
       'articles_inventaire' => _store.articlesInventaire.getAll().map((e) => e.toSupabaseMap()).toList(),
@@ -313,10 +300,6 @@ class SyncWorker {
       .count();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PULL MERGER — Fusionne les données distantes dans ObjectBox
-// ─────────────────────────────────────────────────────────────────────────────
-
 class PullMerger {
   static final _store = ObjectBoxStore.instance;
   static final _log = Logger();
@@ -328,8 +311,8 @@ class PullMerger {
           case 'fournisseurs':
             _mergeGeneric(box: _store.fournisseurs, row: row, query: (uuid) => _store.fournisseurs.query(FournisseurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => FournisseurEntity.fromSupabaseMap(m));
           case 'articles':
-            _mergeGeneric(box: _store.articles, row: row, query: (uuid) => _store.articles.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _articleFromMap(m));
-          case 'utilisateurs':
+            _mergeGeneric(box: _store.articles, row: row, query: (uuid) => _store.articles.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => ArticleEntity.fromSupabaseMap(m));
+          case 'profils_utilisateurs':
             _mergeGeneric(box: _store.utilisateurs, row: row, query: (uuid) => _store.utilisateurs.query(UtilisateurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _userFromMap(m));
           case 'services_hopital':
             _mergeGeneric(box: _store.services, row: row, query: (uuid) => _store.services.query(ServiceHopitalEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _serviceFromMap(m));
@@ -358,34 +341,8 @@ class PullMerger {
   }) {
     final uuid = row['uuid'] as String;
     final existing = query(uuid);
-
-    // Stratégie simple : Si remote_updated_at > local_updated_at, on écrase.
-    // Sauf si local est en 'pending_push', alors on laisse SyncWorker gérer le conflit.
-    if (existing == null) {
-      box.put(fromMap(row));
-    } else {
-      // Pour l'instant, on fait un simple "Last Write Wins" si pas en attente de push
-      box.put(fromMap(row)); 
-    }
+    box.put(fromMap(row));
   }
-
-  // ── Mappers robustes (Supabase JSON -> Entities) ──
-
-  static ArticleEntity _articleFromMap(Map<String, dynamic> m) => ArticleEntity()
-    ..uuid = m['uuid'] ?? ''
-    ..codeArticle = m['code_article'] ?? ''
-    ..designation = m['designation'] ?? ''
-    ..description = m['description']
-    ..categorieUuid = m['categorie_uuid']
-    ..uniteMesure = m['unite_mesure'] ?? 'unité'
-    ..prixUnitaireMoyen = (m['prix_unitaire_moyen'] as num? ?? 0).toDouble()
-    ..stockActuel = m['stock_actuel'] ?? 0
-    ..stockMinimum = m['stock_minimum'] ?? 0
-    ..estSerialise = m['est_serialise'] ?? false
-    ..actif = m['actif'] ?? true
-    ..isDeleted = m['is_deleted'] ?? false
-    ..updatedAt = DateTime.parse(m['updated_at'])
-    ..syncStatus = 'synced';
 
   static UtilisateurEntity _userFromMap(Map<String, dynamic> m) => UtilisateurEntity()
     ..uuid = m['uuid'] ?? ''
@@ -457,130 +414,58 @@ class PullMerger {
     ..syncStatus = 'synced';
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFLICT DETECTOR — Détecte et stocke les conflits
-// ─────────────────────────────────────────────────────────────────────────────
-
 class ConflictDetector {
   static final ConflictDetector instance = ConflictDetector._();
   ConflictDetector._();
-
   final _store = ObjectBoxStore.instance;
   final _log = Logger();
+  final _conflictStreamController = StreamController<List<ConflictEntity>>.broadcast();
+  Stream<List<ConflictEntity>> get conflictsStream => _conflictStreamController.stream;
 
-  // Notifier pour badge UI
-  final _conflictStreamController =
-      StreamController<List<ConflictEntity>>.broadcast();
-  Stream<List<ConflictEntity>> get conflictsStream =>
-      _conflictStreamController.stream;
-
-  Future<ConflictData?> check({
-    required String tableName,
-    required String uuid,
-    required Map<String, dynamic> localPayload,
-    required String deviceId,
-  }) async {
+  Future<ConflictData?> check({required String tableName, required String uuid, required Map<String, dynamic> localPayload, required String deviceId}) async {
     final client = SupabaseConfigService.instance.client;
     if (client == null) return null;
-
     try {
-      final remote = await client
-          .from(tableName)
-          .select()
-          .eq('uuid', uuid)
-          .maybeSingle()
-          .timeout(const Duration(seconds: 8));
-
+      final remote = await client.from(tableName).select().eq('uuid', uuid).maybeSingle().timeout(const Duration(seconds: 15));
       if (remote == null) return null;
-
       final remoteDeviceId = remote['device_id'] as String? ?? '';
-      if (remoteDeviceId == deviceId) return null; // Même poste
-
+      if (remoteDeviceId == deviceId) return null;
       final remoteTime = DateTime.parse(remote['updated_at'] as String);
-      final localTime = DateTime.parse(
-        localPayload['updated_at'] as String? ??
-            DateTime.now().toIso8601String(),
-      );
-
-      // Conflit si le remote a été modifié par un autre poste APRÈS notre local
+      final localTime = DateTime.parse(localPayload['updated_at'] as String? ?? DateTime.now().toIso8601String());
       if (remoteTime.isAfter(localTime.subtract(const Duration(seconds: 3)))) {
-        return ConflictData(
-          tableName: tableName,
-          uuid: uuid,
-          localPayload: localPayload,
-          remotePayload: Map<String, dynamic>.from(remote),
-          localDeviceId: deviceId,
-          remoteDeviceId: remoteDeviceId,
-        );
+        return ConflictData(tableName: tableName, uuid: uuid, localPayload: localPayload, remotePayload: Map<String, dynamic>.from(remote), localDeviceId: deviceId, remoteDeviceId: remoteDeviceId);
       }
-    } catch (e) {
-      _log.w('ConflictDetector.check error: $e');
-    }
+    } catch (e) { _log.w('ConflictDetector.check error: $e'); }
     return null;
   }
 
   Future<void> enqueue(ConflictData conflict) async {
-    final entity = ConflictEntity()
-      ..conflictId = const Uuid().v4()
-      ..tableName = conflict.tableName
-      ..recordUuid = conflict.uuid
-      ..localPayload = jsonEncode(conflict.localPayload)
-      ..remotePayload = jsonEncode(conflict.remotePayload)
-      ..localDeviceId = conflict.localDeviceId
-      ..remoteDeviceId = conflict.remoteDeviceId
-      ..status = 'pending'
-      ..detectedAt = DateTime.now();
-
+    final entity = ConflictEntity()..conflictId = const Uuid().v4()..tableName = conflict.tableName..recordUuid = conflict.uuid..localPayload = jsonEncode(conflict.localPayload)..remotePayload = jsonEncode(conflict.remotePayload)..localDeviceId = conflict.localDeviceId..remoteDeviceId = conflict.remoteDeviceId..status = 'pending'..detectedAt = DateTime.now();
     _store.conflicts.put(entity);
     _notifyListeners();
   }
 
-  // ── Résoudre un conflit (appelé par l'admin depuis l'UI) ──
-  Future<void> resolve({
-    required int conflictId,
-    required String choice, // 'local' | 'remote' | 'custom'
-    required Map<String, dynamic> resolvedPayload,
-    required String resolvedByUuid,
-  }) async {
+  Future<void> resolve({required int conflictId, required String choice, required Map<String, dynamic> resolvedPayload, required String resolvedByUuid}) async {
     final conflict = _store.conflicts.get(conflictId);
     if (conflict == null) return;
-
     conflict.status = 'resolved_$choice';
     conflict.resolvedPayload = jsonEncode(resolvedPayload);
     conflict.resolvedByUuid = resolvedByUuid;
     conflict.resolvedAt = DateTime.now();
     _store.conflicts.put(conflict);
-
-    // Pousser la version résolue vers Supabase
     final client = SupabaseConfigService.instance.client;
     if (client != null) {
       resolvedPayload['updated_at'] = DateTime.now().toIso8601String();
       resolvedPayload['device_id'] = DeviceInfoService.id;
-
-      await client
-          .from(conflict.tableName)
-          .upsert(resolvedPayload, onConflict: 'uuid');
+      await client.from(conflict.tableName).upsert(resolvedPayload, onConflict: 'uuid');
     }
-
     _notifyListeners();
   }
 
-  List<ConflictEntity> getPending() => _store.conflicts
-      .query(ConflictEntity_.status.equals('pending'))
-      .order(ConflictEntity_.detectedAt, flags: Order.descending)
-      .build()
-      .find();
-
+  List<ConflictEntity> getPending() => _store.conflicts.query(ConflictEntity_.status.equals('pending')).order(ConflictEntity_.detectedAt, flags: Order.descending).build().find();
   int get pendingCount => getPending().length;
-
-  void _notifyListeners() {
-    _conflictStreamController.add(getPending());
-  }
+  void _notifyListeners() => _conflictStreamController.add(getPending());
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SYNC ENGINE — Provider global exposé à l'UI
-// ─────────────────────────────────────────────────────────────────────────────
 
 class SyncEngine extends ChangeNotifier {
   SyncState _state = SyncState.idle;
@@ -588,7 +473,6 @@ class SyncEngine extends ChangeNotifier {
   int _conflictCount = 0;
   String? _lastError;
   DateTime? _lastSyncTime;
-
   SyncState get state => _state;
   int get pendingCount => _pendingCount;
   int get conflictCount => _conflictCount;
@@ -596,29 +480,22 @@ class SyncEngine extends ChangeNotifier {
   DateTime? get lastSyncTime => _lastSyncTime;
   bool get hasPending => _pendingCount > 0;
   bool get hasConflicts => _conflictCount > 0;
-
   Timer? _periodicTimer;
 
   SyncEngine() {
-    // Sync périodique toutes les 5 minutes
     _periodicTimer = Timer.periodic(const Duration(minutes: 5), (_) => sync());
-
-    // Écouter les nouveaux conflits
     ConflictDetector.instance.conflictsStream.listen((_) {
       _conflictCount = ConflictDetector.instance.pendingCount;
       notifyListeners();
     });
-
     _refresh();
   }
 
   Future<void> sync() async {
     if (_state == SyncState.syncing) return;
     if (!SupabaseConfigService.instance.isSupabaseReady) return;
-
     _state = SyncState.syncing;
     notifyListeners();
-
     try {
       await SyncWorker.instance.processQueue();
       _lastSyncTime = DateTime.now();
@@ -628,7 +505,6 @@ class SyncEngine extends ChangeNotifier {
       _state = SyncState.error;
       _lastError = e.toString();
     }
-
     _refresh();
     notifyListeners();
   }
@@ -639,8 +515,5 @@ class SyncEngine extends ChangeNotifier {
   }
 
   @override
-  void dispose() {
-    _periodicTimer?.cancel();
-    super.dispose();
-  }
+  void dispose() { _periodicTimer?.cancel(); super.dispose(); }
 }

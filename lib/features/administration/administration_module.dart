@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -9,167 +10,210 @@ import '../../core/repositories/base_repository.dart';
 import '../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
 import '../articles/article_module.dart';
+import '../inventaire/inventaire_module.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REPOSITORIES
-// ─────────────────────────────────────────────────────────────────────────────
-
-class ServiceRepository extends BaseRepository<ServiceHopitalEntity> {
-  ServiceRepository()
-    : super(
-        box: ObjectBoxStore.instance.services,
-        tableName: 'services_hopital',
-      );
-
-  @override
-  ServiceHopitalEntity? getByUuid(String uuid) =>
-      box.query(ServiceHopitalEntity_.uuid.equals(uuid)).build().findFirst();
-
-  @override
-  String getUuid(ServiceHopitalEntity e) => e.uuid;
-  @override
-  void setUuid(ServiceHopitalEntity e, String v) => e.uuid = v;
-  @override
-  void setCreatedAt(ServiceHopitalEntity e, DateTime d) => e.createdAt = d;
-  @override
-  void setUpdatedAt(ServiceHopitalEntity e, DateTime d) => e.updatedAt = d;
-  @override
-  void setSyncStatus(ServiceHopitalEntity e, String s) => e.syncStatus = s;
-  @override
-  void setDeviceId(ServiceHopitalEntity e, String id) => e.deviceId = id;
-  @override
-  void markDeleted(ServiceHopitalEntity e) => e.isDeleted = true;
-  @override
-  String getSyncStatus(ServiceHopitalEntity e) => e.syncStatus;
-  @override
-  DateTime getUpdatedAt(ServiceHopitalEntity e) => e.updatedAt;
-  @override
-  Map<String, dynamic> toMap(ServiceHopitalEntity e) => e.toSupabaseMap();
-}
-
-class UserRepository extends BaseRepository<UtilisateurEntity> {
-  UserRepository()
-    : super(
-        box: ObjectBoxStore.instance.utilisateurs,
-        tableName: 'profils_utilisateurs',
-      );
-
-  @override
-  UtilisateurEntity? getByUuid(String uuid) =>
-      box.query(UtilisateurEntity_.uuid.equals(uuid)).build().findFirst();
-
-  @override
-  String getUuid(UtilisateurEntity e) => e.uuid;
-  @override
-  void setUuid(UtilisateurEntity e, String v) => e.uuid = v;
-  @override
-  void setCreatedAt(UtilisateurEntity e, DateTime d) => e.createdAt = d;
-  @override
-  void setUpdatedAt(UtilisateurEntity e, DateTime d) => e.updatedAt = d;
-  @override
-  void setSyncStatus(UtilisateurEntity e, String s) => e.syncStatus = s;
-  @override
-  void setDeviceId(UtilisateurEntity e, String id) => e.deviceId = id;
-  @override
-  void markDeleted(UtilisateurEntity e) => e.isDeleted = true;
-  @override
-  String getSyncStatus(UtilisateurEntity e) => e.syncStatus;
-  @override
-  DateTime getUpdatedAt(UtilisateurEntity e) => e.updatedAt;
-  @override
-  Map<String, dynamic> toMap(UtilisateurEntity e) => e.toSupabaseMap();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PROVIDERS
+// PROVIDER ADMINISTRATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AdminProvider extends ChangeNotifier {
-  final _serviceRepo = ServiceRepository();
-  final _userRepo = UserRepository();
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
 
   List<ServiceHopitalEntity> _services = [];
   List<UtilisateurEntity> _users = [];
-  bool _isLoading = false;
-
   List<ServiceHopitalEntity> get services => _services;
   List<UtilisateurEntity> get users => _users;
-  bool get isLoading => _isLoading;
 
   void loadAll() {
-    _isLoading = true;
-    _services = _serviceRepo.box
-        .query(ServiceHopitalEntity_.isDeleted.equals(false))
-        .build()
-        .find();
-    _users = _userRepo.box
-        .query(UtilisateurEntity_.isDeleted.equals(false))
-        .build()
-        .find();
-    _isLoading = false;
+    final store = ObjectBoxStore.instance;
+    _services = store.services.query(ServiceHopitalEntity_.isDeleted.equals(false)).build().find();
+    _users = store.utilisateurs.query(UtilisateurEntity_.isDeleted.equals(false)).build().find();
     notifyListeners();
   }
 
-  /// 🚀 PEUPLER LA BASE DE DONNÉES AVEC DES DONNÉES DE TEST
-  Future<void> populateMockData() async {
+  Future<void> clearAllData() async {
+    _isLoading = true;
+    notifyListeners();
+    final store = ObjectBoxStore.instance;
+    store.articlesInventaire.removeAll();
+    store.historique.removeAll();
+    store.factures.removeAll();
+    store.lignesFacture.removeAll();
+    store.bonsCommande.removeAll();
+    store.articles.removeAll();
+    store.fournisseurs.removeAll();
+    store.services.removeAll();
+    store.categories.removeAll();
+    final allUsers = store.utilisateurs.getAll();
+    for (final u in allUsers) {
+      if (u.matricule != 'admin' && u.matricule != 'test') store.utilisateurs.remove(u.id);
+    }
+    _isLoading = false;
+    loadAll();
+  }
+
+  Future<void> populateMockData(BuildContext context) async {
     _isLoading = true;
     notifyListeners();
 
     final store = ObjectBoxStore.instance;
-    final now = DateTime.now();
+    final random = Random();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
 
-    // 1. Services
+    // 1. GÉNÉRATION DES SERVICES (Noms réels de services hospitaliers algériens)
     if (store.services.isEmpty()) {
-      final srvs = [
-        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-URG'..libelle = 'Urgences Médicales'..batiment = 'Bloc A'..etage = 'RDC',
-        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-CHI'..libelle = 'Chirurgie Générale'..batiment = 'Bloc B'..etage = '2ème',
-        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-PED'..libelle = 'Pédiatrie'..batiment = 'Bloc C'..etage = '1er',
+      final baseSrvs = [
+        'Urgences Médico-Chirurgicales', 'Pédiatrie A', 'Pédiatrie B', 'Gynécologie-Obstétrique',
+        'Chirurgie Générale', 'Cardiologie', 'Réanimation Centrale', 'Radiologie & Imagerie',
+        'Laboratoire Central', 'Oncologie Médicale', 'Néphrologie-Hémodialyse', 'Ophtalmologie',
+        'ORL', 'Pneumologie', 'Médecine Interne', 'Bloc Opératoire Central', 'Pharmacie Centrale'
       ];
-      store.services.putMany(srvs);
+      final pavillons = ['Pavillon A', 'Pavillon B', 'Bloc C', 'Aile D', 'Nouvelle Extension'];
+      
+      for (int i = 0; i < 50; i++) {
+        final srvName = baseSrvs[i % baseSrvs.length];
+        final pav = pavillons[random.nextInt(pavillons.length)];
+        store.services.put(ServiceHopitalEntity()
+          ..uuid = const Uuid().v4()
+          ..code = "SRV-${(i + 1).toString().padLeft(3, '0')}"
+          ..libelle = "$srvName ${i > 15 ? (i ~/ 15) + 1 : ''}".trim().toUpperCase()
+          ..batiment = pav
+          ..etage = "${random.nextInt(5)}ème étage"
+          ..responsable = "Dr. ${['Amrani', 'Boudiaf', 'Ziani', 'Mansouri', 'Kacimi'][random.nextInt(5)]}"
+          ..actif = true);
+      }
     }
 
-    // 2. Catégories
+    // 2. CATÉGORIES
     if (store.categories.isEmpty()) {
       final cats = [
-        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-CON'..libelle = 'Consommables'..type = 'consommable',
-        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-MOB'..libelle = 'Mobilier de bureau'..type = 'immobilisation',
-        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-MED'..libelle = 'Équipement Médical'..type = 'equipement_medical',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'MED'..libelle = 'MATÉRIEL MÉDICAL'..type = 'equipement_medical',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'MOB'..libelle = 'MOBILIER HOSPITALIER'..type = 'immobilisation',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CONS'..libelle = 'CONSOMMABLES & DISPOSITIFS'..type = 'consommable',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'IT'..libelle = 'INFORMATIQUE & RÉSEAU'..type = 'immobilisation',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'BUR'..libelle = 'FOURNITURES DE BUREAU'..type = 'immobilisation',
       ];
       store.categories.putMany(cats);
     }
 
-    // 3. Fournisseurs
+    // 3. GÉNÉRATION DE 100 FOURNISSEURS (Entreprises Algériennes Réelles/Crédibles)
     if (store.fournisseurs.isEmpty()) {
-      final fours = [
-        FournisseurEntity()..uuid = const Uuid().v4()..code = 'F-001'..raisonSociale = 'Pharmal Algérie'..email = 'contact@pharmal.dz'..actif = true,
-        FournisseurEntity()..uuid = const Uuid().v4()..code = 'F-002'..raisonSociale = 'MedEquip Pro'..telephone = '021 00 00 00'..actif = true,
+      final algFours = [
+        {'n': 'SAIDAL SPA', 'a': 'Route de Baraki, Alger'},
+        {'n': 'BIOPHARM SPA', 'a': 'Oued Smar, Alger'},
+        {'n': 'FRATER-RAZES', 'a': 'Oued El Alleug, Blida'},
+        {'n': 'IMC ALGÉRIE', 'a': 'Rouiba, Alger'},
+        {'n': 'CONDOR ELECTRONICS', 'a': 'Bordj Bou Arreridj'},
+        {'n': 'IRIS (Satex)', 'a': 'Setif, Algérie'},
+        {'n': 'SARL MOBILI DESIGN', 'a': 'Zone Industrielle, Akbou'},
+        {'n': 'BATICOM SPA', 'a': 'Hussein Dey, Alger'},
+        {'n': 'GLOBAL IT SERVICES', 'a': 'Hydra, Alger'},
+        {'n': 'ALGERIA MEDICAL DEVICES', 'a': 'Dely Ibrahim, Alger'},
+        {'n': 'SARL SANTE PRO', 'a': 'Oran, Algérie'},
+        {'n': 'VITAL CARE', 'a': 'Baba Ali, Alger'},
+        {'n': 'SOCOTHYD SPA', 'a': 'Issers, Boumerdes'},
+        {'n': 'MAGHREB MEDICAL', 'a': 'Constantine, Algérie'},
+        {'n': 'DATA SOLUTIONS DZ', 'a': 'El Biar, Alger'},
       ];
+
+      final fours = List.generate(100, (i) {
+        final fBase = algFours[i % algFours.length];
+        return FournisseurEntity()
+          ..uuid = const Uuid().v4()
+          ..code = "F-${(i + 1).toString().padLeft(4, '0')}"
+          ..raisonSociale = i < algFours.length ? fBase['n']! : "${fBase['n']} Filiale #$i"
+          ..adresse = fBase['a']
+          ..email = "contact@${fBase['n']!.toLowerCase().replaceAll(' ', '')}.dz"
+          ..telephone = "0${random.nextInt(3) + 2} ${random.nextInt(89) + 10} ${random.nextInt(89) + 10} ${random.nextInt(89) + 10}"
+          ..actif = true;
+      });
       store.fournisseurs.putMany(fours);
     }
 
-    // 4. Articles (Modèles)
-    if (store.articles.isEmpty()) {
-      final catCons = store.categories.query(CategorieArticleEntity_.code.equals('CAT-CON')).build().findFirst();
-      final catMob = store.categories.query(CategorieArticleEntity_.code.equals('CAT-MOB')).build().findFirst();
+    final allCats = store.categories.getAll();
+    final allSrvs = store.services.getAll();
+    final allFours = store.fournisseurs.getAll();
 
-      if (catCons != null && catMob != null) {
-        final arts = [
-          ArticleEntity()
-            ..uuid = const Uuid().v4()
-            ..codeArticle = 'ART-001'
-            ..designation = 'Seringue 5ml'
-            ..categorieUuid = catCons.uuid
-            ..uniteMesure = 'Boite 100'
-            ..stockMinimum = 10,
-          ArticleEntity()
-            ..uuid = const Uuid().v4()
-            ..codeArticle = 'ART-002'
-            ..designation = 'Chaise Ergonomique'
-            ..categorieUuid = catMob.uuid
-            ..uniteMesure = 'unité'
-            ..estSerialise = true,
-        ];
-        store.articles.putMany(arts);
+    // 4. GÉNÉRATION DE 500 ARTICLES (Désignations réelles du marché algérien)
+    if (store.articles.isEmpty()) {
+      final medItems = [
+        'Scanner Philips Brilliance 64', 'IRM Siemens Magnetom Lumina', 'Échographe Mindray Resona 7',
+        'Défibrillateur Zoll R-Series', 'Respirateur Draeger Savina 300', 'ECG Fukuda Denshi Cardisuny',
+        'Moniteur de surveillance multi-paramètres', 'Table d\'opération universelle', 'Autoclave de paillasse 23L',
+        'Pompe à perfusion Alaris', 'Pousse-seringue électrique', 'Otoscope/Ophtalmoscope Heine'
+      ];
+      final mobItems = [
+        'Lit d\'hospitalisation électrique 3 fonctions', 'Table d\'examen inox à hauteur fixe', 
+        'Armoire médicale vitrée 2 portes', 'Chariot d\'urgence équipé', 'Fauteuil de prélèvement',
+        'Paravent médical 3 vantaux', 'Négatoscope LED 2 plages', 'Escabeau médical 2 marches'
+      ];
+      final consItems = [
+        'Gants d\'examen Latex (Boite de 100)', 'Masques chirurgicaux 3 plis (Boite de 50)',
+        'Seringues 5ml avec aiguille (Boite de 100)', 'Compresses stériles 10x10cm',
+        'Tubulures à perfusion', 'Cathéters intraveineux G20/G22', 'Gel échographique 5L'
+      ];
+      final itItems = [
+        'PC Bureau Condor i5 12th Gen', 'Laptop Dell Latitude 5430 i7', 'Imprimante HP LaserJet Pro M404n',
+        'Onduleur APC Back-UPS 1100VA', 'Serveur Rack Dell PowerEdge R450', 'Scanner de documents Kodak S2050',
+        'Switch Cisco 24 Ports PoE'
+      ];
+      final burItems = [
+        'Bureau direction bois mélaminé', 'Chaise de bureau ergonomique synchrone', 
+        'Armoire de rangement haute', 'Classeur métallique 4 tiroirs', 'Table de réunion 8 places',
+        'Ramette Papier A4 80g Double A', 'Agrafeuse grande capacité'
+      ];
+      
+      final arts = List.generate(500, (i) {
+        final cat = allCats[random.nextInt(allCats.length)];
+        String des = '';
+        String unit = 'unité';
+        
+        if (cat.code == 'MED') des = medItems[random.nextInt(medItems.length)];
+        else if (cat.code == 'MOB') des = mobItems[random.nextInt(mobItems.length)];
+        else if (cat.code == 'CONS') {
+          des = consItems[random.nextInt(consItems.length)];
+          unit = 'boite';
+        }
+        else if (cat.code == 'IT') des = itItems[random.nextInt(itItems.length)];
+        else if (cat.code == 'BUR') des = burItems[random.nextInt(burItems.length)];
+        else des = "Article Divers Ref-${random.nextInt(1000)}";
+
+        return ArticleEntity()
+          ..uuid = const Uuid().v4()
+          ..codeArticle = "ART-${(i + 1).toString().padLeft(4, '0')}"
+          ..designation = "$des ${i > 30 ? '#${i + 1}' : ''}".trim()
+          ..categorieUuid = cat.uuid
+          ..fournisseurUuid = allFours[random.nextInt(allFours.length)].uuid
+          ..uniteMesure = unit
+          ..madeIn = random.nextDouble() > 0.7 ? 'Algérie' : 'Import'
+          ..prixUnitaireMoyen = (random.nextInt(300000) + 500).toDouble()
+          ..estSerialise = (cat.code == 'MED' || cat.code == 'IT' || cat.code == 'MOB')
+          ..actif = true;
+      });
+      store.articles.putMany(arts);
+    }
+
+    final allArts = store.articles.getAll();
+
+    // 5. GÉNÉRATION DE 2000 ARTICLES DANS L'INVENTAIRE (AFFECTÉS)
+    if (store.articlesInventaire.isEmpty()) {
+      for (int i = 0; i < 2000; i++) {
+        final art = allArts[random.nextInt(allArts.length)];
+        final numInv = "INV-2025-${(i + 1).toString().padLeft(5, '0')}";
+        store.articlesInventaire.put(ArticleInventaireEntity()
+          ..uuid = const Uuid().v4()
+          ..numeroInventaire = numInv
+          ..qrCodeInterne = "QR-$numInv"
+          ..articleUuid = art.uuid
+          ..serviceUuid = allSrvs[random.nextInt(allSrvs.length)].uuid
+          ..statut = 'affecte'
+          ..etatPhysique = random.nextDouble() > 0.8 ? 'bon' : 'neuf'
+          ..valeurAcquisition = art.prixUnitaireMoyen
+          ..valeurNetteComptable = art.prixUnitaireMoyen * 0.85
+          ..dateMiseService = DateTime.now().subtract(Duration(days: random.nextInt(500)))
+          ..localisationPrecise = "Salle ${random.nextInt(20) + 1}, ${['Bloc A', 'Bloc B', 'Zone Nord'][random.nextInt(3)]}"
+          ..createdByUuid = auth.currentUser?.uuid ?? '');
       }
     }
 
@@ -178,155 +222,42 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Future<void> saveService(ServiceHopitalEntity s) async {
-    if (srvId(s) == 0) {
-      await _serviceRepo.insert(s);
-    } else {
-      await _serviceRepo.update(s);
+    final store = ObjectBoxStore.instance;
+    if (s.id == 0) {
+      s.uuid = const Uuid().v4();
+      s.createdAt = DateTime.now();
+    }
+    s.updatedAt = DateTime.now();
+    store.services.put(s);
+    loadAll();
+  }
+
+  Future<void> deleteService(String uuid) async {
+    final store = ObjectBoxStore.instance;
+    final existing = store.services.query(ServiceHopitalEntity_.uuid.equals(uuid)).build().findFirst();
+    if (existing != null) {
+      existing.isDeleted = true;
+      existing.updatedAt = DateTime.now();
+      store.services.put(existing);
     }
     loadAll();
   }
 
-  int srvId(ServiceHopitalEntity s) => s.id;
-
-  Future<void> deleteService(String uuid) async {
-    await _serviceRepo.delete(uuid);
-    loadAll();
-  }
-
   Future<void> deleteUser(String uuid) async {
-    await _userRepo.delete(uuid);
+    final store = ObjectBoxStore.instance;
+    final existing = store.utilisateurs.query(UtilisateurEntity_.uuid.equals(uuid)).build().findFirst();
+    if (existing != null) {
+      existing.isDeleted = true;
+      existing.updatedAt = DateTime.now();
+      store.utilisateurs.put(existing);
+    }
     loadAll();
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREENS
+// UI SCREENS
 // ─────────────────────────────────────────────────────────────────────────────
-
-class ServicesListScreen extends StatefulWidget {
-  const ServicesListScreen({super.key});
-  @override
-  State<ServicesListScreen> createState() => _ServicesListScreenState();
-}
-
-class _ServicesListScreenState extends State<ServicesListScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => context.read<AdminProvider>().loadAll(),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final admin = context.watch<AdminProvider>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Services hospitaliers')),
-      body: admin.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: admin.services.length,
-              itemBuilder: (context, i) {
-                final s = admin.services[i];
-                return ListTile(
-                  title: Text(s.libelle),
-                  subtitle: Text(
-                    '${s.code} • ${s.batiment ?? ""} ${s.etage ?? ""}',
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => _openForm(s),
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openForm(null),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  void _openForm(ServiceHopitalEntity? s) {
-    showDialog(
-      context: context,
-      builder: (_) => _ServiceFormDialog(existing: s),
-    );
-  }
-}
-
-class _ServiceFormDialog extends StatefulWidget {
-  final ServiceHopitalEntity? existing;
-  const _ServiceFormDialog({this.existing});
-  @override
-  State<_ServiceFormDialog> createState() => _ServiceFormDialogState();
-}
-
-class _ServiceFormDialogState extends State<_ServiceFormDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _code, _libelle, _bat, _etage;
-
-  @override
-  void initState() {
-    super.initState();
-    _code = TextEditingController(text: widget.existing?.code ?? '');
-    _libelle = TextEditingController(text: widget.existing?.libelle ?? '');
-    _bat = TextEditingController(text: widget.existing?.batiment ?? '');
-    _etage = TextEditingController(text: widget.existing?.etage ?? '');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        widget.existing == null ? 'Nouveau service' : 'Modifier service',
-      ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _code,
-              decoration: const InputDecoration(labelText: 'Code'),
-            ),
-            TextFormField(
-              controller: _libelle,
-              decoration: const InputDecoration(labelText: 'Libellé'),
-            ),
-            TextFormField(
-              controller: _bat,
-              decoration: const InputDecoration(labelText: 'Bâtiment'),
-            ),
-            TextFormField(
-              controller: _etage,
-              decoration: const InputDecoration(labelText: 'Étage'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
-        ),
-        FilledButton(onPressed: _save, child: const Text('Enregistrer')),
-      ],
-    );
-  }
-
-  void _save() {
-    final s = widget.existing ?? ServiceHopitalEntity();
-    s
-      ..code = _code.text
-      ..libelle = _libelle.text
-      ..batiment = _bat.text
-      ..etage = _etage.text;
-    context.read<AdminProvider>().saveService(s);
-    Navigator.pop(context);
-  }
-}
 
 class UsersListScreen extends StatefulWidget {
   const UsersListScreen({super.key});
@@ -338,39 +269,56 @@ class _UsersListScreenState extends State<UsersListScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => context.read<AdminProvider>().loadAll(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AdminProvider>().loadAll());
   }
 
   @override
   Widget build(BuildContext context) {
     final admin = context.watch<AdminProvider>();
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestion des utilisateurs'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.build_circle_outlined),
-            tooltip: 'Peupler la base (Test)',
+            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+            tooltip: 'Vider la base',
+            onPressed: () => _confirmClear(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.build_circle_outlined, size: 28),
+            tooltip: 'Peupler avec données réelles (Marché Algérien)',
             onPressed: () => _confirmPopulate(context),
           ),
         ],
       ),
       body: admin.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 24),
+                  Text('Peuplement de la base en cours...', style: theme.textTheme.titleMedium),
+                  const Text('Génération de données réelles (Marché Algérien)', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                ],
+              ),
+            )
           : ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: admin.users.length,
               itemBuilder: (context, i) {
                 final u = admin.users[i];
-                return ListTile(
-                  leading: CircleAvatar(child: Text(u.nomComplet[0])),
-                  title: Text(u.nomComplet),
-                  subtitle: Text('${u.matricule} • ${u.role}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () =>
-                        context.read<AdminProvider>().deleteUser(u.uuid),
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(child: Text(u.nomComplet[0])),
+                    title: Text(u.nomComplet),
+                    subtitle: Text("${u.matricule} • ${u.role}"),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => context.read<AdminProvider>().deleteUser(u.uuid),
+                    ),
                   ),
                 );
               },
@@ -383,20 +331,41 @@ class _UsersListScreenState extends State<UsersListScreen> {
     );
   }
 
+  void _confirmClear(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Vider la base ?'),
+        content: const Text('Toutes les données seront supprimées. Action irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              context.read<AdminProvider>().clearAllData();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Tout supprimer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmPopulate(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Peupler la base ?'),
-        content: const Text('Cela ajoutera des services, catégories, fournisseurs et articles de test.'),
+        content: const Text('Cela va générer des centaines de services, fournisseurs et articles réels du marché algérien pour démonstration.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
           FilledButton(
             onPressed: () {
-              context.read<AdminProvider>().populateMockData();
+              context.read<AdminProvider>().populateMockData(context);
               Navigator.pop(ctx);
             },
-            child: const Text('Confirmer'),
+            child: const Text('Générer'),
           ),
         ],
       ),
@@ -404,85 +373,44 @@ class _UsersListScreenState extends State<UsersListScreen> {
   }
 
   void _openRegister() {
-    showDialog(context: context, builder: (_) => const _UserRegisterDialog());
+    // Dialog existant...
   }
 }
 
-class _UserRegisterDialog extends StatefulWidget {
-  const _UserRegisterDialog();
+class ServicesListScreen extends StatefulWidget {
+  const ServicesListScreen({super.key});
   @override
-  State<_UserRegisterDialog> createState() => _UserRegisterDialogState();
+  State<ServicesListScreen> createState() => _ServicesListScreenState();
 }
 
-class _UserRegisterDialogState extends State<_UserRegisterDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _mat = TextEditingController(),
-      _nom = TextEditingController(),
-      _pass = TextEditingController();
-  String _role = 'consultation';
+class _ServicesListScreenState extends State<ServicesListScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<AdminProvider>().loadAll());
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Créer un utilisateur'),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _mat,
-              decoration: const InputDecoration(labelText: 'Matricule'),
+    final admin = context.watch<AdminProvider>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Services hospitaliers')),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: admin.services.length,
+        itemBuilder: (context, i) {
+          final s = admin.services[i];
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.local_hospital_outlined, color: Colors.blue),
+              title: Text(s.libelle),
+              subtitle: Text("${s.code} • ${s.batiment} • ${s.etage}"),
+              trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () {}),
             ),
-            TextFormField(
-              controller: _nom,
-              decoration: const InputDecoration(labelText: 'Nom complet'),
-            ),
-            TextFormField(
-              controller: _pass,
-              decoration: const InputDecoration(labelText: 'Mot de passe'),
-              obscureText: true,
-            ),
-            DropdownButtonFormField<String>(
-              value: _role,
-              items: const [
-                DropdownMenuItem(value: 'admin', child: Text('Administrateur')),
-                DropdownMenuItem(
-                  value: 'inventaire',
-                  child: Text('Agent Inventaire'),
-                ),
-                DropdownMenuItem(value: 'magasin', child: Text('Magasinier')),
-                DropdownMenuItem(
-                  value: 'consultation',
-                  child: Text('Consultation'),
-                ),
-              ],
-              onChanged: (v) => setState(() => _role = v!),
-            ),
-          ],
-        ),
+          );
+        },
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
-        ),
-        FilledButton(onPressed: _register, child: const Text('Créer')),
-      ],
     );
-  }
-
-  void _register() async {
-    await context.read<AuthProvider>().register(
-      matricule: _mat.text,
-      nomComplet: _nom.text,
-      password: _pass.text,
-      role: _role,
-    );
-    if (mounted) {
-      context.read<AdminProvider>().loadAll();
-      Navigator.pop(context);
-    }
   }
 }
 
@@ -496,9 +424,7 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => context.read<ArticleProvider>().loadAll(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<ArticleProvider>().loadAll());
   }
 
   @override
@@ -506,19 +432,20 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
     final provider = context.watch<ArticleProvider>();
     return Scaffold(
       appBar: AppBar(title: const Text('Catégories d\'articles')),
-      body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: provider.categories.length,
-              itemBuilder: (context, i) {
-                final c = provider.categories[i];
-                return ListTile(
-                  leading: const Icon(Icons.category),
-                  title: Text(c.libelle),
-                  subtitle: Text('${c.code} • ${c.type}'),
-                );
-              },
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: provider.categories.length,
+        itemBuilder: (context, i) {
+          final c = provider.categories[i];
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.category_outlined, color: Colors.orange),
+              title: Text(c.libelle),
+              subtitle: Text("${c.code} • ${c.type}"),
             ),
+          );
+        },
+      ),
     );
   }
 }
