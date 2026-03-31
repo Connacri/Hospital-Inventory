@@ -5,13 +5,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
+import '../../core/auth/auth_provider.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/repositories/base_repository.dart';
 import '../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
+import '../fournisseurs/fournisseur_module.dart';
+import '../inventaire/inventaire_module.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REPOSITORIES
@@ -130,9 +135,12 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
   Future<ArticleEntity> create({
     required String designation,
     required String categorieUuid,
+    String? fournisseurUuid,
+    String? madeIn,
     String? description,
     String uniteMesure = 'unité',
     String? codeGtin,
+    double prixUnitaireMoyen = 0,
     int stockMinimum = 0,
     bool estSerialise = false,
   }) async {
@@ -141,8 +149,11 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       ..designation = designation
       ..description = description
       ..categorieUuid = categorieUuid
+      ..fournisseurUuid = fournisseurUuid
+      ..madeIn = madeIn
       ..uniteMesure = uniteMesure
       ..codeGtin = codeGtin
+      ..prixUnitaireMoyen = prixUnitaireMoyen
       ..stockMinimum = stockMinimum
       ..estSerialise = estSerialise
       ..actif = true;
@@ -206,18 +217,24 @@ class ArticleProvider extends ChangeNotifier {
   Future<ArticleEntity> create({
     required String designation,
     required String categorieUuid,
+    String? fournisseurUuid,
+    String? madeIn,
     String? description,
     String uniteMesure = 'unité',
     String? codeGtin,
+    double prixUnitaireMoyen = 0,
     int stockMinimum = 0,
     bool estSerialise = false,
   }) async {
     final e = await _repo.create(
       designation: designation,
       categorieUuid: categorieUuid,
+      fournisseurUuid: fournisseurUuid,
+      madeIn: madeIn,
       description: description,
       uniteMesure: uniteMesure,
       codeGtin: codeGtin,
+      prixUnitaireMoyen: prixUnitaireMoyen,
       stockMinimum: stockMinimum,
       estSerialise: estSerialise,
     );
@@ -306,6 +323,7 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
+                    isExpanded: true,
                     value: _filterCategorie,
                     decoration: const InputDecoration(
                       labelText: 'Catégorie',
@@ -319,7 +337,7 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
                       ...provider.categories.map(
                         (c) => DropdownMenuItem(
                           value: c.uuid,
-                          child: Text(c.libelle),
+                          child: Text(c.libelle, overflow: TextOverflow.ellipsis),
                         ),
                       ),
                     ],
@@ -341,6 +359,7 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
                     return _ArticleCard(
                       article: a,
                       categorie: categoriesById[a.categorieUuid],
+                      onTap: () => _openDetail(context, a),
                       onEdit: () => _openForm(context, existing: a),
                       onDelete: () => _delete(context, a),
                     ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
@@ -354,6 +373,13 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Nouvel article'),
       ),
+    );
+  }
+
+  void _openDetail(BuildContext context, ArticleEntity a) {
+    showDialog(
+      context: context,
+      builder: (_) => ArticleDetailDialog(article: a),
     );
   }
 
@@ -395,12 +421,14 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
 class _ArticleCard extends StatelessWidget {
   final ArticleEntity article;
   final CategorieArticleEntity? categorie;
+  final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ArticleCard({
     required this.article,
     this.categorie,
+    required this.onTap,
     required this.onEdit,
     required this.onDelete,
   });
@@ -413,6 +441,7 @@ class _ArticleCard extends StatelessWidget {
 
     return Card(
       child: ListTile(
+        onTap: onTap,
         leading: Icon(
           _typeIcon(categorie?.type),
           color: isAlerte ? theme.colorScheme.error : theme.colorScheme.primary,
@@ -423,28 +452,14 @@ class _ArticleCard extends StatelessWidget {
               child: Text(
                 a.designation,
                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 4),
             if (a.estSerialise)
-              Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text('SÉRIALISÉ', style: theme.textTheme.labelSmall),
-              ),
+              _Badge(text: 'SÉRIALISÉ', color: theme.colorScheme.secondaryContainer),
             if (isAlerte)
-              Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text('STOCK BAS', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
-              ),
+              _Badge(text: 'ALERTE', color: theme.colorScheme.errorContainer, textColor: theme.colorScheme.error),
           ],
         ),
         subtitle: Text(
@@ -455,7 +470,7 @@ class _ArticleCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '${a.prixUnitaireMoyen.toStringAsFixed(2)} DA',
+              '${a.prixUnitaireMoyen.toStringAsFixed(0)} DA',
               style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
@@ -481,6 +496,22 @@ class _ArticleCard extends StatelessWidget {
   };
 }
 
+class _Badge extends StatelessWidget {
+  final String text;
+  final Color color;
+  final Color? textColor;
+  const _Badge({required this.text, required this.color, this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: textColor)),
+    );
+  }
+}
+
 // ── Formulaire article ────────────────────────────────────────────────────
 
 class ArticleFormDialog extends StatefulWidget {
@@ -498,9 +529,17 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   late final TextEditingController _unite;
   late final TextEditingController _gtin;
   late final TextEditingController _stockMin;
+  late final TextEditingController _madeIn;
+  late final TextEditingController _prix;
+  late final TextEditingController _quantiteInitiale;
+  
   String? _categorieUuid;
+  String? _fournisseurUuid;
   bool _estSerialise = false;
   bool _isSaving = false;
+
+  final List<TextEditingController> _serialControllers = [];
+  List<String?> _serials = [];
 
   @override
   void initState() {
@@ -511,13 +550,37 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     _unite = TextEditingController(text: a?.uniteMesure ?? 'unité');
     _gtin = TextEditingController(text: a?.codeGtin ?? '');
     _stockMin = TextEditingController(text: (a?.stockMinimum ?? 0).toString());
+    _madeIn = TextEditingController(text: a?.madeIn ?? '');
+    _prix = TextEditingController(text: (a?.prixUnitaireMoyen ?? 0).toString());
+    _quantiteInitiale = TextEditingController(text: '0');
+    
     _categorieUuid = a?.categorieUuid;
+    _fournisseurUuid = a?.fournisseurUuid;
     _estSerialise = a?.estSerialise ?? false;
+
+    _updateSerialControllers();
+  }
+
+  void _updateSerialControllers() {
+    final q = int.tryParse(_quantiteInitiale.text) ?? 0;
+    if (_serialControllers.length < q) {
+      while (_serialControllers.length < q) {
+        _serialControllers.add(TextEditingController());
+      }
+    } else if (_serialControllers.length > q) {
+      while (_serialControllers.length > q) {
+        final last = _serialControllers.removeLast();
+        last.dispose();
+      }
+    }
   }
 
   @override
   void dispose() {
-    for (final c in [_designation, _description, _unite, _gtin, _stockMin]) {
+    for (final c in [_designation, _description, _unite, _gtin, _stockMin, _madeIn, _prix, _quantiteInitiale]) {
+      c.dispose();
+    }
+    for (final c in _serialControllers) {
       c.dispose();
     }
     super.dispose();
@@ -529,147 +592,334 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     final theme = Theme.of(context);
     final isEdit = widget.existing != null;
 
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 750),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.inventory_2_outlined),
-                  const SizedBox(width: 12),
-                  Text(
-                    isEdit ? 'Modifier article' : 'Nouvel article',
-                    style: theme.textTheme.titleLarge,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 700;
+        final q = int.tryParse(_quantiteInitiale.text) ?? 0;
+
+        return Dialog(
+          insetPadding: isMobile ? const EdgeInsets.all(10) : const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 900, maxHeight: MediaQuery.of(context).size.height * 0.9),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
+                  child: Row(
                     children: [
-                      TextFormField(
-                        controller: _designation,
-                        decoration: const InputDecoration(
-                          labelText: 'Désignation *',
-                        ),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Requis' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _categorieUuid,
-                        decoration: const InputDecoration(
-                          labelText: 'Catégorie *',
-                          prefixIcon: Icon(Icons.category_outlined),
-                        ),
-                        items: provider.categories
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c.uuid,
-                                child: Text(c.libelle),
-                              ),
-                            )
-                            .toList(),
-                        validator: (v) =>
-                            v == null ? 'Catégorie requise' : null,
-                        onChanged: (v) => setState(() => _categorieUuid = v),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _unite,
-                              decoration: const InputDecoration(
-                                labelText: 'Unité de mesure',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _stockMin,
-                              decoration: const InputDecoration(
-                                labelText: 'Stock minimum',
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _gtin,
-                        decoration: const InputDecoration(
-                          labelText: 'Code GTIN / EAN (GS1)',
-                          hintText:
-                              'Optionnel — interopérabilité internationale',
+                      const Icon(Icons.inventory_2_outlined),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isEdit ? 'Modifier article' : 'Nouvel article',
+                          style: theme.textTheme.titleLarge,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _description,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                        ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 16),
-                      SwitchListTile(
-                        title: const Text('Article sérialisé'),
-                        subtitle: const Text(
-                          'Chaque unité a un N° de série fabricant',
-                        ),
-                        value: _estSerialise,
-                        onChanged: (v) => setState(() => _estSerialise = v),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
                 ),
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: isMobile 
+                        ? _buildMobileLayout(provider, theme, isEdit, q) 
+                        : _buildDesktopLayout(provider, theme, isEdit, q),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Annuler'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        icon: _isSaving
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.save),
+                        label: Text(isEdit ? 'Modifier' : 'Enregistrer'),
+                        onPressed: _isSaving ? null : _save,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    );
+  }
+
+  Widget _buildDesktopLayout(ArticleProvider provider, ThemeData theme, bool isEdit, int q) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 5,
+          child: Column(children: _buildFormFields(provider, theme, isEdit)),
+        ),
+        if (!isEdit && q > 0) ...[
+          const SizedBox(width: 32),
+          Expanded(
+            flex: 4,
+            child: _buildSerialSection(theme, q),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout(ArticleProvider provider, ThemeData theme, bool isEdit, int q) {
+    return Column(
+      children: [
+        ..._buildFormFields(provider, theme, isEdit),
+        if (!isEdit && q > 0) ...[
+          const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Divider()),
+          _buildSerialSection(theme, q),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildFormFields(ArticleProvider provider, ThemeData theme, bool isEdit) {
+    return [
+      TextFormField(
+        controller: _designation,
+        decoration: const InputDecoration(labelText: 'Désignation *'),
+        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              isExpanded: true,
+              value: _categorieUuid,
+              decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)),
+              items: provider.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle, overflow: TextOverflow.ellipsis))).toList(),
+              validator: (v) => v == null ? 'Requis' : null,
+              onChanged: (v) => setState(() => _categorieUuid = v),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextFormField(
+              controller: _madeIn,
+              decoration: const InputDecoration(labelText: 'Origine', prefixIcon: Icon(Icons.public)),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      FournisseurAutocomplete(
+        initialValue: _fournisseurUuid != null ? context.read<FournisseurProvider>().fournisseurs.where((f) => f.uuid == _fournisseurUuid).firstOrNull : null,
+        onSelected: (f) => setState(() => _fournisseurUuid = f.uuid),
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _prix,
+              decoration: const InputDecoration(labelText: 'Prix d\'achat', prefixIcon: Icon(Icons.payments_outlined), suffixText: 'DA'),
+              keyboardType: TextInputType.number,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextFormField(
+              controller: _unite,
+              decoration: const InputDecoration(labelText: 'Unité'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _gtin,
+        decoration: const InputDecoration(labelText: 'Code GTIN / EAN (Barcode)', prefixIcon: Icon(Icons.qr_code_scanner)),
+      ),
+      const SizedBox(height: 16),
+      SwitchListTile(
+        title: const Text('Article sérialisé'),
+        subtitle: const Text('Numéro de série unique par unité'),
+        value: _estSerialise,
+        onChanged: (v) => setState(() => _estSerialise = v),
+      ),
+      if (!isEdit) ...[
+        const Divider(height: 32),
+        TextFormField(
+          controller: _quantiteInitiale,
+          decoration: const InputDecoration(labelText: 'Stock initial à créer', prefixIcon: Icon(Icons.add_shopping_cart)),
+          keyboardType: TextInputType.number,
+          onChanged: (v) {
+            setState(() {
+              _updateSerialControllers();
+            });
+          },
+        ),
+      ],
+    ];
+  }
+
+  Widget _buildSerialSection(ThemeData theme, int q) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text('Numéros de série', style: theme.textTheme.titleMedium, overflow: TextOverflow.ellipsis)),
+            if (_estSerialise)
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+                onPressed: () => _startContinuousScan(context, q),
+                tooltip: 'Scan continu',
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SerialFieldsGenerator(
+          quantite: q,
+          designation: _designation.text.isEmpty ? 'Nouvel article' : _designation.text,
+          estSerialise: _estSerialise,
+          externalControllers: _serialControllers,
+          onChanged: (serials) => _serials = serials,
+        ),
+      ],
+    );
+  }
+
+  void _startContinuousScan(BuildContext context, int count) async {
+    final scanned = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => ContinuousScannerDialog(count: count),
+    );
+    if (scanned != null && scanned.isNotEmpty) {
+      setState(() {
+        for (int i = 0; i < scanned.length && i < _serialControllers.length; i++) {
+          _serialControllers[i].text = scanned[i];
+        }
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    final provider = context.read<ArticleProvider>();
+    final invProvider = context.read<InventaireProvider>();
+    final auth = context.read<AuthProvider>();
+
+    try {
+      if (widget.existing == null) {
+        final a = await provider.create(
+          designation: _designation.text.trim(),
+          categorieUuid: _categorieUuid!,
+          fournisseurUuid: _fournisseurUuid,
+          madeIn: _madeIn.text.trim(),
+          prixUnitaireMoyen: double.tryParse(_prix.text) ?? 0,
+          description: _description.text.trim().isNotEmpty ? _description.text.trim() : null,
+          uniteMesure: _unite.text.trim().isNotEmpty ? _unite.text.trim() : 'unité',
+          codeGtin: _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null,
+          stockMinimum: int.tryParse(_stockMin.text) ?? 0,
+          estSerialise: _estSerialise,
+        );
+
+        final q = int.tryParse(_quantiteInitiale.text) ?? 0;
+        if (q > 0) {
+          await invProvider.creerBatch(
+            articleUuid: a.uuid,
+            ficheReceptionUuid: 'STOCK-INITIAL-${DateTime.now().year}',
+            ligneReceptionUuid: const Uuid().v4(),
+            quantite: q,
+            serials: _serials,
+            valeurUnitaire: double.tryParse(_prix.text) ?? 0,
+            createdByUuid: auth.currentUser?.uuid ?? '',
+          );
+        }
+      } else {
+        final a = widget.existing!;
+        a
+          ..designation = _designation.text.trim()
+          ..categorieUuid = _categorieUuid
+          ..fournisseurUuid = _fournisseurUuid
+          ..madeIn = _madeIn.text.trim()
+          ..prixUnitaireMoyen = double.tryParse(_prix.text) ?? 0
+          ..description = _description.text.trim().isNotEmpty ? _description.text.trim() : null
+          ..uniteMesure = _unite.text.trim().isNotEmpty ? _unite.text.trim() : 'unité'
+          ..codeGtin = _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null
+          ..stockMinimum = int.tryParse(_stockMin.text) ?? 0
+          ..estSerialise = _estSerialise;
+        await provider.update(a);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+}
+
+class ArticleDetailDialog extends StatelessWidget {
+  final ArticleEntity article;
+  const ArticleDetailDialog({super.key, required this.article});
+
+  @override
+  Widget build(BuildContext context) {
+    final a = article;
+    final theme = Theme.of(context);
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              color: theme.colorScheme.primaryContainer,
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline),
+                  const SizedBox(width: 12),
+                  Text('Détails Article', style: theme.textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              padding: const EdgeInsets.all(24),
+              child: Column(
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(isEdit ? 'Modifier' : 'Enregistrer'),
-                    onPressed: _isSaving ? null : _save,
-                  ),
+                  _InfoRow('Code', a.codeArticle),
+                  _InfoRow('Désignation', a.designation),
+                  _InfoRow('Stock Actuel', '${a.stockActuel} ${a.uniteMesure}'),
+                  _InfoRow('PUMP', '${a.prixUnitaireMoyen.toStringAsFixed(0)} DA'),
+                  _InfoRow('Made in', a.madeIn ?? '—'),
+                  _InfoRow('EAN/GTIN', a.codeGtin ?? '—'),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Text(a.description ?? 'Pas de description.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                 ],
               ),
             ),
@@ -678,45 +928,92 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
       ),
     );
   }
+}
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSaving = true);
-    final provider = context.read<ArticleProvider>();
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _InfoRow(this.label, this.value);
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+        ],
+      ),
+    );
+  }
+}
 
-    if (widget.existing == null) {
-      await provider.create(
-        designation: _designation.text.trim(),
-        categorieUuid: _categorieUuid!,
-        description: _description.text.trim().isNotEmpty
-            ? _description.text.trim()
-            : null,
-        uniteMesure: _unite.text.trim().isNotEmpty
-            ? _unite.text.trim()
-            : 'unité',
-        codeGtin: _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null,
-        stockMinimum: int.tryParse(_stockMin.text) ?? 0,
-        estSerialise: _estSerialise,
-      );
-    } else {
-      final a = widget.existing!;
-      a
-        ..designation = _designation.text.trim()
-        ..categorieUuid = _categorieUuid
-        ..description = _description.text.trim().isNotEmpty
-            ? _description.text.trim()
-            : null
-        ..uniteMesure = _unite.text.trim().isNotEmpty
-            ? _unite.text.trim()
-            : 'unité'
-        ..codeGtin = _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null
-        ..stockMinimum = int.tryParse(_stockMin.text) ?? 0
-        ..estSerialise = _estSerialise;
-      await provider.update(a);
-    }
+// ── Continuous Scanner Dialog ─────────────────────────────────────────────
 
-    setState(() => _isSaving = false);
-    if (mounted) Navigator.pop(context);
+class ContinuousScannerDialog extends StatefulWidget {
+  final int count;
+  const ContinuousScannerDialog({super.key, required this.count});
+
+  @override
+  State<ContinuousScannerDialog> createState() => _ContinuousScannerDialogState();
+}
+
+class _ContinuousScannerDialogState extends State<ContinuousScannerDialog> {
+  final List<String> _scannedCodes = [];
+  bool _isComplete = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Scan continu (${_scannedCodes.length}/${widget.count})'),
+      content: SizedBox(
+        width: 400,
+        height: 500,
+        child: Column(
+          children: [
+            if (!_isComplete)
+              Expanded(
+                flex: 2,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: MobileScanner(
+                    onDetect: (capture) {
+                      final List<Barcode> barcodes = capture.barcodes;
+                      for (final barcode in barcodes) {
+                        final code = barcode.rawValue;
+                        if (code != null && !_scannedCodes.contains(code)) {
+                          setState(() {
+                            _scannedCodes.add(code);
+                            if (_scannedCodes.length >= widget.count) _isComplete = true;
+                          });
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _scannedCodes.length,
+                itemBuilder: (context, i) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.check_circle, color: Colors.green),
+                  title: Text(_scannedCodes[i]),
+                  trailing: IconButton(icon: const Icon(Icons.delete_outline, size: 18), onPressed: () => setState(() => _scannedCodes.removeAt(i))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        FilledButton(onPressed: _scannedCodes.isEmpty ? null : () => Navigator.pop(context, _scannedCodes), child: const Text('Valider')),
+      ],
+    );
   }
 }
 

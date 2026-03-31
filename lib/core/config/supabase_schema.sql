@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS articles (
   designation           TEXT NOT NULL,
   description           TEXT,
   categorie_uuid        UUID,
+  fournisseur_uuid      UUID,
+  made_in               TEXT,
   unite_mesure          TEXT DEFAULT 'unité',
   code_gtin             TEXT,
   code_unspsc           TEXT,

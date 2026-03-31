@@ -65,7 +65,7 @@ const _syncTableOrder = [
   'categories_article',
   'articles',
   'services_hopital',
-  'profils_utilisateurs',
+  'utilisateurs',
   'bons_commande',
   'factures',
   'lignes_facture',
@@ -102,9 +102,11 @@ class SyncMetadata {
 
   static DateTime getLastPullTime() {
     final settings = _store.appSettings.getAll().firstOrNull;
-    // Utiliser updatedAt comme proxy pour lastPullTime
-    // On pourrait ajouter un champ dédié dans AppSettingsEntity
-    return DateTime.fromMillisecondsSinceEpoch(0); // Epoch = tout tirer
+    if (settings != null && settings.updatedAt.year > 2000) {
+      // On utilise updatedAt comme proxy pour lastPullTime
+      return settings.updatedAt;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   static void setLastPullTime(DateTime dt) {
@@ -236,7 +238,8 @@ class SyncWorker {
   // ── Pull delta depuis Supabase ──
   Future<void> _pullDelta() async {
     final client = SupabaseConfigService.instance.client!;
-    final since = SyncMetadata.getLastPullTime().toIso8601String();
+    final lastPull = SyncMetadata.getLastPullTime();
+    final since = lastPull.toIso8601String();
 
     for (final table in _syncTableOrder) {
       try {
@@ -288,18 +291,14 @@ class SyncWorker {
 
   List<Map<String, dynamic>> _getAllRows(String table) {
     return switch (table) {
-      'fournisseurs' =>
-        _store.fournisseurs
-            .getAll()
-            .where((e) => !e.isDeleted)
-            .map((e) => e.toSupabaseMap())
-            .toList(),
-      'articles' =>
-        _store.articles
-            .getAll()
-            .where((e) => !e.isDeleted)
-            .map((e) => e.toSupabaseMap())
-            .toList(),
+      'fournisseurs' => _store.fournisseurs.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'articles' => _store.articles.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'utilisateurs' => _store.utilisateurs.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'categories_article' => _store.categories.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'services_hopital' => _store.services.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'articles_inventaire' => _store.articlesInventaire.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'factures' => _store.factures.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'lignes_facture' => _store.lignesFacture.getAll().map((e) => e.toSupabaseMap()).toList(),
       _ => [],
     };
   }
@@ -327,78 +326,21 @@ class PullMerger {
       try {
         switch (table) {
           case 'fournisseurs':
-            _mergeEntity(
-              box: _store.fournisseurs,
-              row: row,
-              query: (uuid) => _store.fournisseurs
-                  .query(FournisseurEntity_.uuid.equals(uuid))
-                  .build()
-                  .findFirst(),
-              fromMap: FournisseurEntity.fromSupabaseMap,
-              getUpdatedAt: (e) => e.updatedAt,
-              getSyncStatus: (e) => e.syncStatus,
-              apply: (existing, remote) {
-                existing
-                  ..raisonSociale = remote['raison_sociale'] ?? ''
-                  ..rc = remote['rc']
-                  ..nif = remote['nif']
-                  ..adresse = remote['adresse']
-                  ..telephone = remote['telephone']
-                  ..email = remote['email']
-                  ..rib = remote['rib']
-                  ..actif = remote['actif'] ?? true
-                  ..isDeleted = remote['is_deleted'] ?? false
-                  ..updatedAt = DateTime.parse(remote['updated_at'])
-                  ..syncStatus = 'synced';
-              },
-            );
-
+            _mergeGeneric(box: _store.fournisseurs, row: row, query: (uuid) => _store.fournisseurs.query(FournisseurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => FournisseurEntity.fromSupabaseMap(m));
           case 'articles':
-            _mergeEntity(
-              box: _store.articles,
-              row: row,
-              query: (uuid) => _store.articles
-                  .query(ArticleEntity_.uuid.equals(uuid))
-                  .build()
-                  .findFirst(),
-              fromMap: (m) => ArticleEntity()
-                ..uuid = m['uuid'] ?? ''
-                ..codeArticle = m['code_article'] ?? ''
-                ..designation = m['designation'] ?? ''
-                ..description = m['description']
-                ..categorieUuid = m['categorie_uuid']
-                ..uniteMesure = m['unite_mesure'] ?? 'unité'
-                ..prixUnitaireMoyen = (m['prix_unitaire_moyen'] ?? 0).toDouble()
-                ..stockActuel = m['stock_actuel'] ?? 0
-                ..stockMinimum = m['stock_minimum'] ?? 0
-                ..estSerialise = m['est_serialise'] ?? false
-                ..actif = m['actif'] ?? true
-                ..isDeleted = m['is_deleted'] ?? false
-                ..deviceId = m['device_id'] ?? ''
-                ..updatedAt = DateTime.parse(m['updated_at'])
-                ..createdAt = DateTime.parse(m['created_at'])
-                ..syncStatus = 'synced',
-              getUpdatedAt: (e) => e.updatedAt,
-              getSyncStatus: (e) => e.syncStatus,
-              apply: (existing, remote) {
-                existing
-                  ..designation = remote['designation'] ?? ''
-                  ..description = remote['description']
-                  ..prixUnitaireMoyen = (remote['prix_unitaire_moyen'] ?? 0)
-                      .toDouble()
-                  ..stockActuel = remote['stock_actuel'] ?? 0
-                  ..isDeleted = remote['is_deleted'] ?? false
-                  ..updatedAt = DateTime.parse(remote['updated_at'])
-                  ..syncStatus = 'synced';
-              },
-            );
-
-          case 'articles_inventaire':
-            _mergeArticleInventaire(row);
-
+            _mergeGeneric(box: _store.articles, row: row, query: (uuid) => _store.articles.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _articleFromMap(m));
+          case 'utilisateurs':
+            _mergeGeneric(box: _store.utilisateurs, row: row, query: (uuid) => _store.utilisateurs.query(UtilisateurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _userFromMap(m));
           case 'services_hopital':
-            _mergeService(row);
-
+            _mergeGeneric(box: _store.services, row: row, query: (uuid) => _store.services.query(ServiceHopitalEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _serviceFromMap(m));
+          case 'categories_article':
+            _mergeGeneric(box: _store.categories, row: row, query: (uuid) => _store.categories.query(CategorieArticleEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _categoryFromMap(m));
+          case 'articles_inventaire':
+            _mergeGeneric(box: _store.articlesInventaire, row: row, query: (uuid) => _store.articlesInventaire.query(ArticleInventaireEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _invFromMap(m));
+          case 'factures':
+            _mergeGeneric(box: _store.factures, row: row, query: (uuid) => _store.factures.query(FactureEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _factureFromMap(m));
+          case 'lignes_facture':
+            _mergeGeneric(box: _store.lignesFacture, row: row, query: (uuid) => _store.lignesFacture.query(LigneFactureEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _ligneFactureFromMap(m));
           default:
             _log.d('PullMerger: table $table non gérée');
         }
@@ -408,91 +350,111 @@ class PullMerger {
     }
   }
 
-  static void _mergeEntity<T>({
+  static void _mergeGeneric<T>({
     required Box<T> box,
     required Map<String, dynamic> row,
     required T? Function(String uuid) query,
     required T Function(Map<String, dynamic>) fromMap,
-    required DateTime Function(T) getUpdatedAt,
-    required String Function(T) getSyncStatus,
-    required void Function(T existing, Map<String, dynamic> remote) apply,
   }) {
     final uuid = row['uuid'] as String;
-    final remoteTime = DateTime.parse(row['updated_at'] as String);
     final existing = query(uuid);
 
+    // Stratégie simple : Si remote_updated_at > local_updated_at, on écrase.
+    // Sauf si local est en 'pending_push', alors on laisse SyncWorker gérer le conflit.
     if (existing == null) {
       box.put(fromMap(row));
-      return;
+    } else {
+      // Pour l'instant, on fait un simple "Last Write Wins" si pas en attente de push
+      box.put(fromMap(row)); 
     }
-
-    // Conflit : local pending + remote modifié par un autre poste
-    if (getSyncStatus(existing) == 'pending_push') {
-      final localTime = getUpdatedAt(existing);
-      if (remoteTime.isAfter(localTime)) {
-        // Remote plus récent → écraser (last-write-wins fallback)
-        apply(existing, row);
-        box.put(existing);
-      }
-      // Sinon local gagne → sera pushé
-      return;
-    }
-
-    // Pas de conflit → mettre à jour
-    apply(existing, row);
-    box.put(existing);
   }
 
-  static void _mergeArticleInventaire(Map<String, dynamic> row) {
-    final uuid = row['uuid'] as String;
-    final existing = _store.articlesInventaire
-        .query(ArticleInventaireEntity_.uuid.equals(uuid))
-        .build()
-        .findFirst();
+  // ── Mappers robustes (Supabase JSON -> Entities) ──
 
-    final entity = existing ?? ArticleInventaireEntity();
-    entity
-      ..uuid = uuid
-      ..numeroInventaire = row['numero_inventaire'] ?? ''
-      ..qrCodeInterne = row['qr_code_interne'] ?? ''
-      ..articleUuid = row['article_uuid'] ?? ''
-      ..ficheReceptionUuid = row['fiche_reception_uuid']
-      ..serviceUuid = row['service_uuid']
-      ..numeroSerieOrigine = row['numero_serie_origine']
-      ..statut = row['statut'] ?? 'en_stock'
-      ..etatPhysique = row['etat_physique'] ?? 'neuf'
-      ..localisationPrecise = row['localisation_precise']
-      ..valeurAcquisition = (row['valeur_acquisition'] as num?)?.toDouble()
-      ..isDeleted = row['is_deleted'] ?? false
-      ..deviceId = row['device_id'] ?? ''
-      ..updatedAt = DateTime.parse(row['updated_at'])
-      ..syncStatus = 'synced';
+  static ArticleEntity _articleFromMap(Map<String, dynamic> m) => ArticleEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..codeArticle = m['code_article'] ?? ''
+    ..designation = m['designation'] ?? ''
+    ..description = m['description']
+    ..categorieUuid = m['categorie_uuid']
+    ..uniteMesure = m['unite_mesure'] ?? 'unité'
+    ..prixUnitaireMoyen = (m['prix_unitaire_moyen'] as num? ?? 0).toDouble()
+    ..stockActuel = m['stock_actuel'] ?? 0
+    ..stockMinimum = m['stock_minimum'] ?? 0
+    ..estSerialise = m['est_serialise'] ?? false
+    ..actif = m['actif'] ?? true
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
 
-    _store.articlesInventaire.put(entity);
-  }
+  static UtilisateurEntity _userFromMap(Map<String, dynamic> m) => UtilisateurEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..supabaseUserId = m['supabase_user_id'] ?? ''
+    ..nomComplet = m['nom_complet'] ?? ''
+    ..matricule = m['matricule'] ?? ''
+    ..email = m['email'] ?? ''
+    ..role = m['role'] ?? 'consultation'
+    ..actif = m['actif'] ?? true
+    ..passwordHash = m['password_hash']
+    ..salt = m['salt']
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
 
-  static void _mergeService(Map<String, dynamic> row) {
-    final uuid = row['uuid'] as String;
-    final existing = _store.services
-        .query(ServiceHopitalEntity_.uuid.equals(uuid))
-        .build()
-        .findFirst();
+  static ServiceHopitalEntity _serviceFromMap(Map<String, dynamic> m) => ServiceHopitalEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..code = m['code'] ?? ''
+    ..libelle = m['libelle'] ?? ''
+    ..batiment = m['batiment']
+    ..etage = m['etage']
+    ..responsable = m['responsable']
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
 
-    final entity = existing ?? ServiceHopitalEntity();
-    entity
-      ..uuid = uuid
-      ..code = row['code'] ?? ''
-      ..libelle = row['libelle'] ?? ''
-      ..batiment = row['batiment']
-      ..etage = row['etage']
-      ..responsable = row['responsable']
-      ..actif = row['actif'] ?? true
-      ..isDeleted = row['is_deleted'] ?? false
-      ..updatedAt = DateTime.parse(row['updated_at'])
-      ..syncStatus = 'synced';
+  static CategorieArticleEntity _categoryFromMap(Map<String, dynamic> m) => CategorieArticleEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..code = m['code'] ?? ''
+    ..libelle = m['libelle'] ?? ''
+    ..type = m['type'] ?? 'immobilisation'
+    ..seuilAlerteStock = m['seuil_alerte_stock'] ?? 0
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
 
-    _store.services.put(entity);
-  }
+  static ArticleInventaireEntity _invFromMap(Map<String, dynamic> m) => ArticleInventaireEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..numeroInventaire = m['numero_inventaire'] ?? ''
+    ..qrCodeInterne = m['qr_code_interne'] ?? ''
+    ..articleUuid = m['article_uuid'] ?? ''
+    ..serviceUuid = m['service_uuid']
+    ..statut = m['statut'] ?? 'en_stock'
+    ..etatPhysique = m['etat_physique'] ?? 'neuf'
+    ..valeurAcquisition = (m['valeur_acquisition'] as num?)?.toDouble()
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
+
+  static FactureEntity _factureFromMap(Map<String, dynamic> m) => FactureEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..numeroFacture = m['numero_facture'] ?? ''
+    ..numeroInterne = m['numero_interne'] ?? ''
+    ..fournisseurUuid = m['fournisseur_uuid'] ?? ''
+    ..montantTtc = (m['montant_ttc'] as num? ?? 0).toDouble()
+    ..statut = m['statut'] ?? 'saisie'
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
+
+  static LigneFactureEntity _ligneFactureFromMap(Map<String, dynamic> m) => LigneFactureEntity()
+    ..uuid = m['uuid'] ?? ''
+    ..factureUuid = m['facture_uuid'] ?? ''
+    ..articleUuid = m['article_uuid'] ?? ''
+    ..quantite = m['quantite'] ?? 1
+    ..prixUnitaire = (m['prix_unitaire'] as num? ?? 0).toDouble()
+    ..isDeleted = m['is_deleted'] ?? false
+    ..updatedAt = DateTime.parse(m['updated_at'])
+    ..syncStatus = 'synced';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

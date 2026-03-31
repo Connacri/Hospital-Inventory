@@ -14,6 +14,7 @@ import '../../../core/objectbox/entities.dart';
 import '../../../core/objectbox/objectbox_store.dart';
 import '../../../core/services/numero_generator.dart';
 import '../../core/repositories/base_repository.dart';
+import '../reception/reception_module.dart';
 import '../../objectbox.g.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -242,6 +243,7 @@ class SerialFieldsGenerator extends StatefulWidget {
   final int quantite;
   final String designation;
   final bool estSerialise;
+  final List<TextEditingController>? externalControllers; // Optionnel
   final void Function(List<String?> serials) onChanged;
 
   const SerialFieldsGenerator({
@@ -250,6 +252,7 @@ class SerialFieldsGenerator extends StatefulWidget {
     required this.designation,
     required this.estSerialise,
     required this.onChanged,
+    this.externalControllers,
   });
 
   @override
@@ -268,19 +271,25 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
   @override
   void didUpdateWidget(SerialFieldsGenerator old) {
     super.didUpdateWidget(old);
-    if (old.quantite != widget.quantite) {
-      for (final c in _controllers) {
-        c.dispose();
+    if (old.quantite != widget.quantite || old.externalControllers != widget.externalControllers) {
+      if (old.externalControllers == null) {
+        for (final c in _controllers) {
+          c.dispose();
+        }
       }
       _buildControllers();
     }
   }
 
   void _buildControllers() {
-    _controllers = List.generate(
-      widget.quantite,
-      (_) => TextEditingController(),
-    );
+    if (widget.externalControllers != null) {
+      _controllers = widget.externalControllers!;
+    } else {
+      _controllers = List.generate(
+        widget.quantite,
+        (_) => TextEditingController(),
+      );
+    }
     for (final c in _controllers) {
       c.addListener(_notify);
     }
@@ -294,8 +303,11 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
 
   @override
   void dispose() {
-    for (final c in _controllers) {
-      c.dispose();
+    // Ne pas dispose si les contrôleurs viennent de l'extérieur
+    if (widget.externalControllers == null) {
+      for (final c in _controllers) {
+        c.dispose();
+      }
     }
     super.dispose();
   }
@@ -308,7 +320,7 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // En-tête
+        // En-tête (FIX: Utilisation de Flexible/Expanded pour éviter l'overflow)
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -319,14 +331,20 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
             children: [
               const Icon(Icons.inventory_2_outlined, size: 18),
               const SizedBox(width: 8),
-              Text(
-                '${widget.quantite} × ${widget.designation}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  '${widget.quantite} × ${widget.designation}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
-              Text(
-                'N° Inventaire auto : à partir de $prochainSeq',
-                style: Theme.of(context).textTheme.bodySmall,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Dès: $prochainSeq',
+                  style: Theme.of(context).textTheme.labelSmall,
+                  textAlign: TextAlign.right,
+                ),
               ),
             ],
           ),
@@ -467,6 +485,17 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
       appBar: AppBar(
         title: const Text('État général de l\'inventaire'),
         actions: [
+          // Bouton Réceptionner
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.primary,
+            ),
+            icon: const Icon(Icons.add_shopping_cart, size: 18),
+            label: const Text('Réceptionner'),
+            onPressed: () => _openReception(context),
+          ),
+          const SizedBox(width: 12),
           // Filtre statut
           DropdownButton<String>(
             value: provider._filterStatut,
@@ -510,6 +539,14 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _openReception(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const FactureFormDialog(),
     );
   }
 
@@ -762,23 +799,23 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
                 children: [
                   const Icon(Icons.inventory_2),
                   const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        a.numeroInventaire,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          a.numeroInventaire,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
                         ),
-                      ),
-                      Text(articleRef?.designation ?? '—'),
-                    ],
+                        Text(articleRef?.designation ?? '—', overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
                   _StatutBadge(statut: a.statut),
-                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
@@ -938,7 +975,7 @@ class _StatutBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (statut) {
+    final (badgeText, color) = switch (statut) {
       'en_stock' => ('En stock', Colors.blue),
       'affecte' => ('Affecté', Colors.green),
       'en_maintenance' => ('Maintenance', Colors.orange),
@@ -948,7 +985,7 @@ class _StatutBadge extends StatelessWidget {
     };
 
     return Chip(
-      label: Text(label, style: const TextStyle(fontSize: 11)),
+      label: Text(badgeText, style: const TextStyle(fontSize: 11)),
       backgroundColor: color.withOpacity(0.15),
       side: BorderSide(color: color.withOpacity(0.5)),
       padding: EdgeInsets.zero,

@@ -15,6 +15,7 @@ import 'features/articles/article_module.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/fournisseurs/fournisseur_module.dart';
 import 'features/inventaire/inventaire_module.dart';
+import 'features/reception/reception_module.dart';
 import 'shared/widgets/main_shell.dart';
 
 class HopitalInventaireApp extends StatelessWidget {
@@ -45,6 +46,8 @@ class HopitalInventaireApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FournisseurProvider()),
         ChangeNotifierProvider(create: (_) => ArticleProvider()),
         ChangeNotifierProvider(create: (_) => InventaireProvider()),
+        ChangeNotifierProvider(create: (_) => BonCommandeProvider()),
+        ChangeNotifierProvider(create: (_) => FactureProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: MaterialApp(

@@ -343,6 +343,8 @@ class ArticleEntity {
   String designation = '';
   String? description;
   String? categorieUuid;
+  String? fournisseurUuid; // Nouveau
+  String? madeIn; // Nouveau
   String uniteMesure = 'unité';
   String? codeGtin; // GS1 international
   String? codeUnspsc; // Référentiel OMS
@@ -369,6 +371,8 @@ class ArticleEntity {
     'designation': designation,
     'description': description,
     'categorie_uuid': categorieUuid,
+    'fournisseur_uuid': fournisseurUuid,
+    'made_in': madeIn,
     'unite_mesure': uniteMesure,
     'code_gtin': codeGtin,
     'code_unspsc': codeUnspsc,
@@ -382,6 +386,30 @@ class ArticleEntity {
     'updated_at': updatedAt.toIso8601String(),
     'created_at': createdAt.toIso8601String(),
   };
+
+  static ArticleEntity fromSupabaseMap(Map<String, dynamic> m) {
+    return ArticleEntity()
+      ..uuid = m['uuid'] ?? ''
+      ..codeArticle = m['code_article'] ?? ''
+      ..designation = m['designation'] ?? ''
+      ..description = m['description']
+      ..categorieUuid = m['categorie_uuid']
+      ..fournisseurUuid = m['fournisseur_uuid']
+      ..madeIn = m['made_in']
+      ..uniteMesure = m['unite_mesure'] ?? 'unité'
+      ..codeGtin = m['code_gtin']
+      ..codeUnspsc = m['code_unspsc']
+      ..prixUnitaireMoyen = (m['prix_unitaire_moyen'] ?? 0).toDouble()
+      ..stockActuel = m['stock_actuel'] ?? 0
+      ..stockMinimum = m['stock_minimum'] ?? 0
+      ..estSerialise = m['est_serialise'] ?? false
+      ..actif = m['actif'] ?? true
+      ..isDeleted = m['is_deleted'] ?? false
+      ..deviceId = m['device_id'] ?? ''
+      ..updatedAt = DateTime.parse(m['updated_at'])
+      ..createdAt = DateTime.parse(m['created_at'])
+      ..syncStatus = 'synced';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

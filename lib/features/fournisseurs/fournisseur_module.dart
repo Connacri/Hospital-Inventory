@@ -493,153 +493,156 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
     final isEdit = widget.existing != null;
     final theme = Theme.of(context);
     
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 800),
-        child: Column(
-          children: [
-            // En-tête
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.business),
-                  const SizedBox(width: 12),
-                  Text(
-                    isEdit
-                        ? 'Modifier ${widget.existing!.raisonSociale}'
-                        : 'Nouveau fournisseur',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
 
-            // Corps
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
+        return Dialog(
+          insetPadding: isMobile ? const EdgeInsets.all(10) : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 650, 
+              maxHeight: MediaQuery.of(context).size.height * 0.85
+            ),
+            child: Column(
+              children: [
+                // En-tête
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: Row(
                     children: [
-                      _buildRow(
-                        TextFormField(
-                          controller: _raisonSociale,
-                          decoration: const InputDecoration(
-                            labelText: 'Raison sociale *',
-                          ),
-                          validator: (v) =>
-                              v == null || v.isEmpty ? 'Requis' : null,
-                        ),
-                        TextFormField(
-                          controller: _nif,
-                          decoration: const InputDecoration(labelText: 'NIF'),
+                      const Icon(Icons.business),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isEdit ? 'Modifier ${widget.existing!.raisonSociale}' : 'Nouveau fournisseur',
+                          style: theme.textTheme.titleLarge,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      _buildRow(
-                        TextFormField(
-                          controller: _rc,
-                          decoration: const InputDecoration(
-                            labelText: 'Registre de commerce',
-                          ),
-                        ),
-                        TextFormField(
-                          controller: _conditions,
-                          decoration: const InputDecoration(
-                            labelText: 'Délai paiement (jours)',
-                          ),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _adresse,
-                        decoration: const InputDecoration(labelText: 'Adresse'),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildRow(
-                        TextFormField(
-                          controller: _telephone,
-                          decoration: const InputDecoration(
-                            labelText: 'Téléphone',
-                          ),
-                        ),
-                        TextFormField(
-                          controller: _email,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _rib,
-                        decoration: const InputDecoration(
-                          labelText: 'RIB / Coordonnées bancaires',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _observations,
-                        decoration: const InputDecoration(
-                          labelText: 'Observations',
-                        ),
-                        maxLines: 2,
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
 
-            // Actions
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Annuler'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                // Corps
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          _buildFieldRow(
+                            isMobile,
+                            TextFormField(
+                              controller: _raisonSociale,
+                              decoration: const InputDecoration(labelText: 'Raison sociale *'),
+                              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
                             ),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(isEdit ? 'Modifier' : 'Enregistrer'),
-                    onPressed: _isSaving ? null : _save,
+                            TextFormField(
+                              controller: _nif,
+                              decoration: const InputDecoration(labelText: 'NIF'),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFieldRow(
+                            isMobile,
+                            TextFormField(
+                              controller: _rc,
+                              decoration: const InputDecoration(labelText: 'Registre de commerce'),
+                            ),
+                            TextFormField(
+                              controller: _conditions,
+                              decoration: const InputDecoration(labelText: 'Délai paiement (jours)'),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _adresse,
+                            decoration: const InputDecoration(labelText: 'Adresse'),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildFieldRow(
+                            isMobile,
+                            TextFormField(
+                              controller: _telephone,
+                              decoration: const InputDecoration(labelText: 'Téléphone'),
+                            ),
+                            TextFormField(
+                              controller: _email,
+                              decoration: const InputDecoration(labelText: 'Email'),
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _rib,
+                            decoration: const InputDecoration(labelText: 'RIB / Coordonnées bancaires'),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _observations,
+                            decoration: const InputDecoration(labelText: 'Observations'),
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                ),
+
+                // Actions
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Annuler'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        icon: _isSaving
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.save),
+                        label: Text(isEdit ? 'Modifier' : 'Enregistrer'),
+                        onPressed: _isSaving ? null : _save,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 
-  Widget _buildRow(Widget left, Widget right) {
+  Widget _buildFieldRow(bool isMobile, Widget left, Widget right) {
+    if (isMobile) {
+      return Column(
+        children: [
+          left,
+          const SizedBox(height: 16),
+          right,
+        ],
+      );
+    }
     return Row(
       children: [
         Expanded(child: left),
