@@ -254,7 +254,6 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
   @override
   void initState() {
     super.initState();
-    // FIX: Utilisation de addPostFrameCallback pour éviter l'erreur "setState() called during build"
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<ArticleProvider>().loadAll();
@@ -265,6 +264,8 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ArticleProvider>();
+    final theme = Theme.of(context);
+    
     var list = _searchCtrl.text.isEmpty
         ? provider.articles
         : provider.searchResults;
@@ -329,20 +330,22 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 6),
-              itemBuilder: (context, i) {
-                final a = list[i];
-                return _ArticleCard(
-                  article: a,
-                  categorie: categoriesById[a.categorieUuid],
-                  onEdit: () => _openForm(context, existing: a),
-                  onDelete: () => _delete(context, a),
-                ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
-              },
-            ),
+            child: list.isEmpty 
+              ? Center(child: Text('Aucun article trouvé', style: theme.textTheme.bodyLarge))
+              : ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, i) {
+                    final a = list[i];
+                    return _ArticleCard(
+                      article: a,
+                      categorie: categoriesById[a.categorieUuid],
+                      onEdit: () => _openForm(context, existing: a),
+                      onDelete: () => _delete(context, a),
+                    ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
+                  },
+                ),
           ),
         ],
       ),
@@ -405,51 +408,55 @@ class _ArticleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = article;
+    final theme = Theme.of(context);
     final isAlerte = a.stockActuel <= a.stockMinimum && a.stockMinimum > 0;
 
     return Card(
       child: ListTile(
-        leading: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _typeIcon(categorie?.type),
-              color: isAlerte ? Colors.red : null,
-            ),
-          ],
+        leading: Icon(
+          _typeIcon(categorie?.type),
+          color: isAlerte ? theme.colorScheme.error : theme.colorScheme.primary,
         ),
         title: Row(
           children: [
-            Text(
-              a.designation,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            Expanded(
+              child: Text(
+                a.designation,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
             ),
-            const SizedBox(width: 8),
             if (a.estSerialise)
-              const Chip(
-                label: Text('Sérialisé', style: TextStyle(fontSize: 10)),
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('SÉRIALISÉ', style: theme.textTheme.labelSmall),
               ),
             if (isAlerte)
-              const Chip(
-                label: Text('⚠️ Stock bas', style: TextStyle(fontSize: 10)),
-                backgroundColor: Color(0xFFFFEBEE),
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('STOCK BAS', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.error)),
               ),
           ],
         ),
         subtitle: Text(
           '${a.codeArticle}  •  ${categorie?.libelle ?? "—"}  •  Stock: ${a.stockActuel} ${a.uniteMesure}',
-          style: const TextStyle(fontSize: 12),
+          style: theme.textTheme.bodySmall,
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '${a.prixUnitaireMoyen.toStringAsFixed(2)} DA',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             IconButton(
@@ -519,17 +526,18 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ArticleProvider>();
+    final theme = Theme.of(context);
     final isEdit = widget.existing != null;
 
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 650),
+        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 750),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: theme.colorScheme.primaryContainer,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(12),
                 ),
@@ -540,7 +548,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                   const SizedBox(width: 12),
                   Text(
                     isEdit ? 'Modifier article' : 'Nouvel article',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: theme.textTheme.titleLarge,
                   ),
                   const Spacer(),
                   IconButton(
@@ -565,7 +573,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                         validator: (v) =>
                             v == null || v.isEmpty ? 'Requis' : null,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: _categorieUuid,
                         decoration: const InputDecoration(
@@ -584,7 +592,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                             v == null ? 'Catégorie requise' : null,
                         onChanged: (v) => setState(() => _categorieUuid = v),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -595,7 +603,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: TextFormField(
                               controller: _stockMin,
@@ -607,7 +615,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _gtin,
                         decoration: const InputDecoration(
@@ -616,7 +624,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                               'Optionnel — interopérabilité internationale',
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _description,
                         decoration: const InputDecoration(
@@ -624,7 +632,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                         ),
                         maxLines: 2,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       SwitchListTile(
                         title: const Text('Article sérialisé'),
                         subtitle: const Text(
@@ -729,6 +737,8 @@ class ArticleAutocomplete extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repo = ArticleRepository();
+    final theme = Theme.of(context);
+    
     return Autocomplete<ArticleEntity>(
       initialValue: TextEditingValue(text: initialValue?.designation ?? ''),
       displayStringForOption: (a) => '${a.codeArticle} — ${a.designation}',
@@ -760,9 +770,10 @@ class ArticleAutocomplete extends StatelessWidget {
               itemBuilder: (ctx, i) {
                 final a = options.elementAt(i);
                 return ListTile(
-                  title: Text(a.designation),
+                  title: Text(a.designation, style: theme.textTheme.bodyLarge),
                   subtitle: Text(
                     '${a.codeArticle} • Stock: ${a.stockActuel} ${a.uniteMesure}',
+                    style: theme.textTheme.bodySmall,
                   ),
                   onTap: () => onSelected(a),
                 );

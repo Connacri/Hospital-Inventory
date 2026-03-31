@@ -227,7 +227,12 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<FournisseurProvider>().loadAll();
+    // Utilisation de postFrameCallback pour éviter l'erreur de build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<FournisseurProvider>().loadAll();
+      }
+    });
   }
 
   @override
@@ -371,28 +376,30 @@ class _FournisseurCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final f = fournisseur;
+    final theme = Theme.of(context);
+    
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          backgroundColor: theme.colorScheme.primaryContainer,
           child: Text(
             f.raisonSociale.isNotEmpty ? f.raisonSociale[0].toUpperCase() : '?',
             style: TextStyle(
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              color: theme.colorScheme.onPrimaryContainer,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
         title: Text(
           f.raisonSociale,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               '${f.code}  •  ${f.conditionsPaiement}j',
-              style: const TextStyle(fontSize: 12),
+              style: theme.textTheme.bodySmall,
             ),
             if (f.telephone != null || f.email != null)
               Text(
@@ -400,7 +407,7 @@ class _FournisseurCard extends StatelessWidget {
                   f.telephone,
                   f.email,
                 ].where((s) => s != null && s.isNotEmpty).join('  •  '),
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
               ),
           ],
         ),
@@ -484,16 +491,18 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
+    final theme = Theme.of(context);
+    
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 800),
         child: Column(
           children: [
             // En-tête
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: theme.colorScheme.primaryContainer,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(12),
                 ),
@@ -506,7 +515,7 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
                     isEdit
                         ? 'Modifier ${widget.existing!.raisonSociale}'
                         : 'Nouveau fournisseur',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: theme.textTheme.titleLarge,
                   ),
                   const Spacer(),
                   IconButton(
@@ -539,7 +548,7 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
                           decoration: const InputDecoration(labelText: 'NIF'),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       _buildRow(
                         TextFormField(
                           controller: _rc,
@@ -555,13 +564,13 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
                           keyboardType: TextInputType.number,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _adresse,
                         decoration: const InputDecoration(labelText: 'Adresse'),
                         maxLines: 2,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       _buildRow(
                         TextFormField(
                           controller: _telephone,
@@ -575,14 +584,14 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
                           keyboardType: TextInputType.emailAddress,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _rib,
                         decoration: const InputDecoration(
                           labelText: 'RIB / Coordonnées bancaires',
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _observations,
                         decoration: const InputDecoration(
@@ -634,7 +643,7 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
     return Row(
       children: [
         Expanded(child: left),
-        const SizedBox(width: 12),
+        const SizedBox(width: 16),
         Expanded(child: right),
       ],
     );
@@ -705,6 +714,7 @@ class FournisseurAutocomplete extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repo = FournisseurRepository();
+    final theme = Theme.of(context);
 
     return Autocomplete<FournisseurEntity>(
       initialValue: TextEditingValue(text: initialValue?.raisonSociale ?? ''),
@@ -743,8 +753,8 @@ class FournisseurAutocomplete extends StatelessWidget {
                   final f = options.elementAt(i);
                   return ListTile(
                     leading: const Icon(Icons.business_outlined),
-                    title: Text(f.raisonSociale),
-                    subtitle: Text('${f.code} • NIF: ${f.nif ?? "—"}'),
+                    title: Text(f.raisonSociale, style: theme.textTheme.bodyLarge),
+                    subtitle: Text('${f.code} • NIF: ${f.nif ?? "—"}', style: theme.textTheme.bodySmall),
                     onTap: () => onSelected(f),
                   );
                 },
@@ -766,13 +776,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.inbox_outlined, size: 64, color: theme.colorScheme.outlineVariant),
           const SizedBox(height: 16),
-          Text(message, style: Theme.of(context).textTheme.bodyLarge),
+          Text(message, style: theme.textTheme.bodyLarge),
           if (onAdd != null) ...[
             const SizedBox(height: 16),
             FilledButton.icon(

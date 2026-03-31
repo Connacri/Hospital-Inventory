@@ -1,4 +1,4 @@
-// lib/app.dart — VERSION FINALE
+// lib/app.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -55,70 +55,33 @@ class HopitalInventaireApp extends StatelessWidget {
           colorScheme: colorScheme,
           scaffoldBackgroundColor: surfaceLight,
 
-          // Typographie experte avec Playfair Display — Tailles MAJEURES partout
-          textTheme: GoogleFonts.playfairDisplayTextTheme()
-              .apply(bodyColor: textDark, displayColor: textDark)
-              .copyWith(
-                displayLarge: GoogleFonts.playfairDisplay(
-                  fontSize: 42,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-                displayMedium: GoogleFonts.playfairDisplay(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-                displaySmall: GoogleFonts.playfairDisplay(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: textDark,
-                ),
-                headlineMedium: GoogleFonts.playfairDisplay(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w600,
-                  color: textDark,
-                ),
-                titleLarge: GoogleFonts.playfairDisplay(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
-                  color: textDark,
-                ),
-                titleMedium: GoogleFonts.playfairDisplay(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w500,
-                  color: textDark,
-                ),
-                titleSmall: GoogleFonts.playfairDisplay(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w500,
-                  color: textDark,
-                ),
-                bodyLarge: GoogleFonts.playfairDisplay(
-                  fontSize: 22,
-                  color: textDark,
-                ),
-                bodyMedium: GoogleFonts.playfairDisplay(
-                  fontSize: 20,
-                  color: textDark,
-                ),
-                bodySmall: GoogleFonts.playfairDisplay(
-                  fontSize: 18,
-                  color: textDark,
-                ),
-                labelLarge: GoogleFonts.playfairDisplay(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-                labelMedium: GoogleFonts.playfairDisplay(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-                labelSmall: GoogleFonts.playfairDisplay(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          // ── TYPOGRAPHIE EXPERTE (NORMES INTERNATIONALES M3) ──
+          textTheme: TextTheme(
+            // Display: Pour les grands titres d'accueil (Hero)
+            displayLarge: GoogleFonts.playfairDisplay(fontSize: 57, fontWeight: FontWeight.bold, letterSpacing: -0.25),
+            displayMedium: GoogleFonts.playfairDisplay(fontSize: 45, fontWeight: FontWeight.bold),
+            displaySmall: GoogleFonts.playfairDisplay(fontSize: 36, fontWeight: FontWeight.bold),
+            
+            // Headlines: Pour les titres de sections majeures
+            headlineLarge: GoogleFonts.playfairDisplay(fontSize: 32, fontWeight: FontWeight.w600),
+            headlineMedium: GoogleFonts.playfairDisplay(fontSize: 28, fontWeight: FontWeight.w600),
+            headlineSmall: GoogleFonts.playfairDisplay(fontSize: 24, fontWeight: FontWeight.w600),
+            
+            // Titles: Pour les titres de composants (Cards, AppBars)
+            titleLarge: GoogleFonts.playfairDisplay(fontSize: 22, fontWeight: FontWeight.w600),
+            titleMedium: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: 0.15),
+            titleSmall: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
+            
+            // Body: Texte de lecture standard (Lisibilité maximale)
+            bodyLarge: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.5),
+            bodyMedium: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.25),
+            bodySmall: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.4),
+            
+            // Labels: Boutons, sous-titres techniques, badges
+            labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
+            labelMedium: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+            labelSmall: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+          ).apply(bodyColor: textDark, displayColor: textDark),
 
           appBarTheme: AppBarTheme(
             centerTitle: false,
@@ -126,104 +89,33 @@ class HopitalInventaireApp extends StatelessWidget {
             backgroundColor: primaryBlue,
             foregroundColor: Colors.white,
             titleTextStyle: GoogleFonts.playfairDisplay(
-              fontSize: 30,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
-            iconTheme: const IconThemeData(color: Colors.white, size: 32),
+            iconTheme: const IconThemeData(color: Colors.white, size: 24),
           ),
 
           navigationRailTheme: NavigationRailThemeData(
             backgroundColor: Colors.white,
-            selectedIconTheme: const IconThemeData(
-              color: primaryBlue,
-              size: 36,
-            ),
-            unselectedIconTheme: IconThemeData(
-              color: Colors.grey.shade600,
-              size: 32,
-            ),
-            selectedLabelTextStyle: GoogleFonts.playfairDisplay(
-              color: primaryBlue,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-            unselectedLabelTextStyle: GoogleFonts.playfairDisplay(
-              color: Colors.grey.shade600,
-              fontSize: 18,
-            ),
-          ),
-
-          navigationBarTheme: NavigationBarThemeData(
-            labelTextStyle: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return GoogleFonts.playfairDisplay(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: primaryBlue,
-                );
-              }
-              return GoogleFonts.playfairDisplay(fontSize: 16, color: textDark);
-            }),
-            iconTheme: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return const IconThemeData(size: 32, color: primaryBlue);
-              }
-              return const IconThemeData(size: 28, color: textDark);
-            }),
+            selectedIconTheme: const IconThemeData(color: primaryBlue, size: 28),
+            unselectedIconTheme: IconThemeData(color: Colors.grey.shade600, size: 24),
+            selectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: primaryBlue),
+            unselectedLabelTextStyle: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
           ),
 
           cardTheme: CardThemeData(
-            elevation: 3,
-            color: Colors.white,
-            surfaceTintColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
-            ),
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
 
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: primaryBlue, width: 2.5),
-            ),
-            labelStyle: GoogleFonts.playfairDisplay(
-              color: Colors.grey.shade700,
-              fontSize: 22,
-            ),
-            hintStyle: GoogleFonts.playfairDisplay(fontSize: 20),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 24,
-            ),
-          ),
-
-          listTileTheme: ListTileThemeData(
-            titleTextStyle: GoogleFonts.playfairDisplay(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: textDark,
-            ),
-            subtitleTextStyle: GoogleFonts.playfairDisplay(
-              fontSize: 18,
-              color: Colors.grey.shade700,
-            ),
-            iconColor: primaryBlue,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 8,
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            labelStyle: GoogleFonts.inter(fontSize: 14),
+            hintStyle: GoogleFonts.inter(fontSize: 14),
           ),
         ),
         home: const _RootNavigator(),
@@ -247,14 +139,9 @@ class _RootNavigatorState extends State<_RootNavigator> {
     final settings = context.watch<SettingsProvider>();
     final auth = context.watch<AuthProvider>();
 
-    // 1. Si déjà connecté, on va direct au shell
     if (auth.isLoggedIn) return const MainShell();
+    if (settings.isProvisioned) return const AuthScreenWidget(key: ValueKey('auth_login'));
 
-    // 2. Si l'appareil est provisionné, on montre l'écran de login classique
-    if (settings.isProvisioned)
-      return const AuthScreenWidget(key: ValueKey('auth_login'));
-
-    // 3. Sinon, on laisse le choix entre QR ou Login Manuel
     switch (_view) {
       case 'qr':
         return ProvisioningScreen(

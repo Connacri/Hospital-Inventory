@@ -1,10 +1,34 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- SCRIPT SQL SUPABASE — Inventaire Hospitalier
+-- SCRIPT SQL SUPABASE — Inventaire Hospitalier (CORRIGÉ)
+-- Alignement strict avec entities.dart (ObjectBox)
 -- À exécuter dans : Supabase Dashboard → SQL Editor
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- UTILISATEURS & RÔLES
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS utilisateurs (
+  id                  BIGSERIAL PRIMARY KEY,
+  uuid                UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+  supabase_user_id    TEXT DEFAULT '',
+  nom_complet         TEXT NOT NULL,
+  matricule           TEXT UNIQUE NOT NULL,
+  email               TEXT NOT NULL,
+  service_uuid        UUID,
+  role                TEXT CHECK (role IN ('admin','inventaire','magasin','consultation','impression')) DEFAULT 'consultation',
+  actif               BOOLEAN DEFAULT true,
+  password_hash       TEXT,
+  salt                TEXT,
+  derniere_connexion  TIMESTAMPTZ,
+  is_deleted          BOOLEAN DEFAULT false,
+  device_id           TEXT DEFAULT '',
+  updated_at          TIMESTAMPTZ DEFAULT now(),
+  created_at          TIMESTAMPTZ DEFAULT now()
+);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- RÉFÉRENTIELS
@@ -55,7 +79,7 @@ CREATE TABLE IF NOT EXISTS articles (
   unite_mesure          TEXT DEFAULT 'unité',
   code_gtin             TEXT,
   code_unspsc           TEXT,
-  prix_unitaire_moyen   NUMERIC(12,2) DEFAULT 0,
+  prix_unitaire_moyen   NUMERIC(15,2) DEFAULT 0,
   stock_actuel          INTEGER DEFAULT 0,
   stock_minimum         INTEGER DEFAULT 0,
   est_serialise         BOOLEAN DEFAULT false,
@@ -81,23 +105,6 @@ CREATE TABLE IF NOT EXISTS services_hopital (
   created_at  TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS profils_utilisateurs (
-  id                  BIGSERIAL PRIMARY KEY,
-  uuid                UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  supabase_user_id    TEXT DEFAULT '',
-  nom_complet         TEXT NOT NULL,
-  matricule           TEXT UNIQUE,
-  email               TEXT,
-  service_uuid        UUID,
-  role                TEXT CHECK (role IN ('admin','inventaire','magasin','consultation','impression')) DEFAULT 'consultation',
-  actif               BOOLEAN DEFAULT true,
-  derniere_connexion  TIMESTAMPTZ,
-  is_deleted          BOOLEAN DEFAULT false,
-  device_id           TEXT DEFAULT '',
-  updated_at          TIMESTAMPTZ DEFAULT now(),
-  created_at          TIMESTAMPTZ DEFAULT now()
-);
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ACHATS
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -109,8 +116,8 @@ CREATE TABLE IF NOT EXISTS bons_commande (
   fournisseur_uuid      UUID,
   date_bc               TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_livraison_prev   TIMESTAMPTZ,
-  montant_total         NUMERIC(12,2) DEFAULT 0,
-  statut                TEXT DEFAULT 'brouillon',
+  montant_total         NUMERIC(15,2) DEFAULT 0,
+  statut                TEXT CHECK (statut IN ('brouillon','valide','partiellement_livre','livre','annule')) DEFAULT 'brouillon',
   observations          TEXT,
   created_by_uuid       UUID,
   is_deleted            BOOLEAN DEFAULT false,
@@ -128,10 +135,10 @@ CREATE TABLE IF NOT EXISTS factures (
   bc_uuid           UUID,
   date_facture      TIMESTAMPTZ NOT NULL DEFAULT now(),
   date_reception    TIMESTAMPTZ,
-  montant_ht        NUMERIC(12,2),
+  montant_ht        NUMERIC(15,2) DEFAULT 0,
   tva               NUMERIC(5,2) DEFAULT 19,
-  montant_ttc       NUMERIC(12,2),
-  statut            TEXT DEFAULT 'saisie',
+  montant_ttc       NUMERIC(15,2) DEFAULT 0,
+  statut            TEXT CHECK (statut IN ('saisie','validee','receptionnee','soldee')) DEFAULT 'saisie',
   fichier_pdf_url   TEXT,
   created_by_uuid   UUID,
   is_deleted        BOOLEAN DEFAULT false,
@@ -143,11 +150,11 @@ CREATE TABLE IF NOT EXISTS factures (
 CREATE TABLE IF NOT EXISTS lignes_facture (
   id              BIGSERIAL PRIMARY KEY,
   uuid            UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  facture_uuid    UUID,
-  article_uuid    UUID,
-  quantite        INTEGER NOT NULL,
-  prix_unitaire   NUMERIC(12,2) NOT NULL,
-  montant_ligne   NUMERIC(12,2),
+  facture_uuid    UUID NOT NULL,
+  article_uuid    UUID NOT NULL,
+  quantite        INTEGER NOT NULL DEFAULT 1,
+  prix_unitaire   NUMERIC(15,2) NOT NULL DEFAULT 0,
+  montant_ligne   NUMERIC(15,2) NOT NULL DEFAULT 0,
   is_deleted      BOOLEAN DEFAULT false,
   device_id       TEXT DEFAULT '',
   updated_at      TIMESTAMPTZ DEFAULT now(),
@@ -155,16 +162,16 @@ CREATE TABLE IF NOT EXISTS lignes_facture (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- RÉCEPTION
+-- RÉCEPTION MAGASIN
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS fiches_reception (
   id                BIGSERIAL PRIMARY KEY,
   uuid              UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
   numero_fr         TEXT UNIQUE NOT NULL,
-  facture_uuid      UUID,
+  facture_uuid      UUID NOT NULL,
   date_reception    TIMESTAMPTZ DEFAULT now(),
-  statut            TEXT DEFAULT 'en_cours',
+  statut            TEXT CHECK (statut IN ('en_cours','validee','litige')) DEFAULT 'en_cours',
   observations      TEXT,
   created_by_uuid   UUID,
   validated_by_uuid UUID,
@@ -178,13 +185,13 @@ CREATE TABLE IF NOT EXISTS fiches_reception (
 CREATE TABLE IF NOT EXISTS lignes_reception (
   id                  BIGSERIAL PRIMARY KEY,
   uuid                UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  fiche_uuid          UUID,
-  article_uuid        UUID,
-  quantite_attendue   INTEGER NOT NULL,
-  quantite_recue      INTEGER NOT NULL,
+  fiche_uuid          UUID NOT NULL,
+  article_uuid        UUID NOT NULL,
+  quantite_attendue   INTEGER NOT NULL DEFAULT 0,
+  quantite_recue      INTEGER NOT NULL DEFAULT 0,
   quantite_rejetee    INTEGER DEFAULT 0,
   motif_rejet         TEXT,
-  etat_article        TEXT DEFAULT 'neuf',
+  etat_article        TEXT CHECK (etat_article IN ('neuf','bon','acceptable','defectueux')) DEFAULT 'neuf',
   is_deleted          BOOLEAN DEFAULT false,
   device_id           TEXT DEFAULT '',
   updated_at          TIMESTAMPTZ DEFAULT now(),
@@ -200,20 +207,20 @@ CREATE TABLE IF NOT EXISTS articles_inventaire (
   uuid                        UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
   numero_inventaire           TEXT UNIQUE NOT NULL,
   qr_code_interne             TEXT UNIQUE NOT NULL,
-  article_uuid                UUID,
+  article_uuid                UUID NOT NULL,
   fiche_reception_uuid        UUID,
   ligne_reception_uuid        UUID,
   service_uuid                UUID,
   numero_serie_origine        TEXT,
   etiquette_imprimee          BOOLEAN DEFAULT false,
-  statut                      TEXT DEFAULT 'en_stock',
-  etat_physique               TEXT DEFAULT 'neuf',
+  statut                      TEXT CHECK (statut IN ('en_stock','affecte','en_maintenance','reforme','cede','perdu_vole')) DEFAULT 'en_stock',
+  etat_physique               TEXT CHECK (etat_physique IN ('neuf','bon','moyen','mauvais')) DEFAULT 'neuf',
   localisation_precise        TEXT,
-  valeur_acquisition          NUMERIC(12,2),
-  valeur_nette_comptable      NUMERIC(12,2),
-  date_mise_service           DATE,
-  date_derniere_maintenance   DATE,
-  date_prochaine_maintenance  DATE,
+  valeur_acquisition          NUMERIC(15,2),
+  valeur_nette_comptable      NUMERIC(15,2),
+  date_mise_service           TIMESTAMPTZ,
+  date_derniere_maintenance   TIMESTAMPTZ,
+  date_prochaine_maintenance  TIMESTAMPTZ,
   observations                TEXT,
   created_by_uuid             UUID,
   is_deleted                  BOOLEAN DEFAULT false,
@@ -223,17 +230,17 @@ CREATE TABLE IF NOT EXISTS articles_inventaire (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- DOTATION
+-- DOTATION & AFFECTATION
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS bons_dotation (
   id                      BIGSERIAL PRIMARY KEY,
   uuid                    UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
   numero_bd               TEXT UNIQUE NOT NULL,
-  service_demandeur_uuid  UUID,
+  service_demandeur_uuid  UUID NOT NULL,
   date_demande            TIMESTAMPTZ DEFAULT now(),
   date_dotation           TIMESTAMPTZ,
-  statut                  TEXT DEFAULT 'demande',
+  statut                  TEXT CHECK (statut IN ('demande','approuve','partiellement_livre','livre','rejete')) DEFAULT 'demande',
   motif                   TEXT,
   approuve_par_uuid       UUID,
   created_by_uuid         UUID,
@@ -246,9 +253,9 @@ CREATE TABLE IF NOT EXISTS bons_dotation (
 CREATE TABLE IF NOT EXISTS lignes_dotation (
   id                    BIGSERIAL PRIMARY KEY,
   uuid                  UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  bon_dotation_uuid     UUID,
-  article_uuid          UUID,
-  quantite_demandee     INTEGER NOT NULL,
+  bon_dotation_uuid     UUID NOT NULL,
+  article_uuid          UUID NOT NULL,
+  quantite_demandee     INTEGER NOT NULL DEFAULT 1,
   quantite_attribuee    INTEGER DEFAULT 0,
   is_deleted            BOOLEAN DEFAULT false,
   device_id             TEXT DEFAULT '',
@@ -259,9 +266,9 @@ CREATE TABLE IF NOT EXISTS lignes_dotation (
 CREATE TABLE IF NOT EXISTS affectations (
   id                        BIGSERIAL PRIMARY KEY,
   uuid                      UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  article_inventaire_uuid   UUID,
+  article_inventaire_uuid   UUID NOT NULL,
   bon_dotation_uuid         UUID,
-  service_uuid              UUID,
+  service_uuid              UUID NOT NULL,
   date_affectation          TIMESTAMPTZ DEFAULT now(),
   date_retour               TIMESTAMPTZ,
   motif_retour              TEXT,
@@ -279,7 +286,7 @@ CREATE TABLE IF NOT EXISTS affectations (
 CREATE TABLE IF NOT EXISTS historique_mouvements (
   id                        BIGSERIAL PRIMARY KEY,
   uuid                      UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
-  article_inventaire_uuid   UUID,
+  article_inventaire_uuid   UUID NOT NULL,
   type_mouvement            TEXT NOT NULL,
   service_source_uuid       UUID,
   service_dest_uuid         UUID,
@@ -297,8 +304,8 @@ CREATE TABLE IF NOT EXISTS historique_mouvements (
 -- INDEX — Performance sur les delta pulls
 -- ─────────────────────────────────────────────────────────────────────────────
 
+CREATE INDEX IF NOT EXISTS idx_utilisateurs_updated ON utilisateurs(updated_at);
 CREATE INDEX IF NOT EXISTS idx_fournisseurs_updated ON fournisseurs(updated_at);
-CREATE INDEX IF NOT EXISTS idx_fournisseurs_device ON fournisseurs(device_id);
 CREATE INDEX IF NOT EXISTS idx_articles_updated ON articles(updated_at);
 CREATE INDEX IF NOT EXISTS idx_articles_inv_updated ON articles_inventaire(updated_at);
 CREATE INDEX IF NOT EXISTS idx_articles_inv_numero ON articles_inventaire(numero_inventaire);
@@ -320,7 +327,7 @@ LANGUAGE sql STABLE AS $$
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- ROW LEVEL SECURITY (RLS) — Activer sur toutes les tables
+-- ROW LEVEL SECURITY (RLS)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DO $$ DECLARE
@@ -330,20 +337,17 @@ BEGIN
     SELECT tablename FROM pg_tables WHERE schemaname = 'public'
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
-    -- Politique permissive pour les service_role (sync Flutter)
+
+    -- Politique permissive pour les service_role (sync Flutter via SyncEngine)
     EXECUTE format(
       'CREATE POLICY IF NOT EXISTS "service_role_all" ON %I
        FOR ALL TO service_role USING (true) WITH CHECK (true)', t
     );
-    -- Politique lecture authentifiée pour anon
+
+    -- Politique lecture authentifiée pour anon/authenticated
     EXECUTE format(
       'CREATE POLICY IF NOT EXISTS "authenticated_read" ON %I
        FOR SELECT TO authenticated USING (is_deleted = false)', t
     );
   END LOOP;
 END $$;
-
--- ══════════════════════════════════════════════════════════════════════════════
--- FIN DU SCRIPT
--- Vérification : SELECT table_name FROM list_user_tables();
--- ══════════════════════════════════════════════════════════════════════════════
