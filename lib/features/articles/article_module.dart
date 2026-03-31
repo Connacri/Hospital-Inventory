@@ -7,10 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
-// FIX: chemins d'import corrigés
-// Depuis lib/features/articles/ :
-//   - '../../' remonte à lib/
-//   - L'ancienne version utilisait '../../../' (au-dessus de lib → incorrect)
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/repositories/base_repository.dart';
@@ -119,9 +115,6 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       .build()
       .find();
 
-  // FIX: ObjectBox ne supporte pas la comparaison de deux champs entre eux
-  // dans une query. On filtre d'abord les articles ayant un stock minimum
-  // défini (> 0), puis on applique la comparaison en mémoire Dart.
   List<ArticleEntity> getAlertesStock() {
     final candidates = box
         .query(
@@ -190,17 +183,15 @@ class ArticleProvider extends ChangeNotifier {
   List<ArticleEntity> _articles = [];
   List<CategorieArticleEntity> _categories = [];
   List<ArticleEntity> _searchResults = [];
-  // FIX: _isLoading était déclaré mais jamais exposé ni modifié → getter ajouté
   bool _isLoading = false;
-  bool get isLoading => _isLoading;
 
   List<ArticleEntity> get articles => _articles;
   List<CategorieArticleEntity> get categories => _categories;
   List<ArticleEntity> get searchResults => _searchResults;
+  bool get isLoading => _isLoading;
 
   void loadAll() {
     _isLoading = true;
-    notifyListeners();
     _articles = _repo.getAll();
     _categories = _catRepo.getAll();
     _isLoading = false;
@@ -263,7 +254,12 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<ArticleProvider>().loadAll();
+    // FIX: Utilisation de addPostFrameCallback pour éviter l'erreur "setState() called during build"
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ArticleProvider>().loadAll();
+      }
+    });
   }
 
   @override
@@ -273,13 +269,9 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
         ? provider.articles
         : provider.searchResults;
     if (_filterCategorie != null) {
-      list = list
-          .where((a) => a.categorieUuid == _filterCategorie)
-          .toList();
+      list = list.where((a) => a.categorieUuid == _filterCategorie).toList();
     }
-    final categoriesById = {
-      for (final c in provider.categories) c.uuid: c,
-    };
+    final categoriesById = {for (final c in provider.categories) c.uuid: c};
 
     return Scaffold(
       appBar: AppBar(

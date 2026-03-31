@@ -192,17 +192,22 @@ class _MainShellState extends State<MainShell> {
                   extended: true,
                   minExtendedWidth: 200,
                   leading: _RailHeader(user: auth.currentUser),
-                  trailing: _RailTrailing(
-                    sync: sync,
-                    conflictCount: sync.conflictCount,
-                    onConflicts: () => _openConflicts(context),
-                    onSupabase: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SupabaseConfigScreen(),
+                  trailing: Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: _RailTrailing(
+                        sync: sync,
+                        conflictCount: sync.conflictCount,
+                        onConflicts: () => _openConflicts(context),
+                        onSupabase: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SupabaseConfigScreen(),
+                          ),
+                        ),
+                        onLogout: () => auth.logout(),
                       ),
                     ),
-                    onLogout: () => auth.logout(),
                   ),
                   destinations: visibleItems.map((item) {
                     return NavigationRailDestination(
@@ -472,49 +477,54 @@ class _RailTrailing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        children: [
-          if (conflictCount > 0)
+    return SizedBox(
+      width:
+          200, // FIX: Largeur fixe pour éviter l'infini dans NavigationRail étendu
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (conflictCount > 0)
+              ListTile(
+                dense: true,
+                leading: Badge(
+                  label: Text('$conflictCount'),
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.warning_amber, color: Colors.orange),
+                ),
+                title: const Text(
+                  'Conflits',
+                  style: TextStyle(fontSize: 12, color: Colors.orange),
+                ),
+                onTap: onConflicts,
+              ),
             ListTile(
               dense: true,
-              leading: Badge(
-                label: Text('$conflictCount'),
-                backgroundColor: Colors.orange,
-                child: const Icon(Icons.warning_amber, color: Colors.orange),
+              leading: Icon(
+                context.watch<SupabaseConfigService>().isSupabaseReady
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_off_outlined,
+                color: context.watch<SupabaseConfigService>().isSupabaseReady
+                    ? Colors.green
+                    : Colors.orange,
               ),
-              title: const Text(
-                'Conflits',
-                style: TextStyle(fontSize: 12, color: Colors.orange),
+              title: Text(
+                context.watch<SupabaseConfigService>().isSupabaseReady
+                    ? 'Supabase actif'
+                    : 'Configurer sync',
+                style: const TextStyle(fontSize: 12),
               ),
-              onTap: onConflicts,
+              onTap: onSupabase,
             ),
-          ListTile(
-            dense: true,
-            leading: Icon(
-              context.watch<SupabaseConfigService>().isSupabaseReady
-                  ? Icons.cloud_done_outlined
-                  : Icons.cloud_off_outlined,
-              color: context.watch<SupabaseConfigService>().isSupabaseReady
-                  ? Colors.green
-                  : Colors.orange,
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.logout_outlined),
+              title: const Text('Déconnexion', style: TextStyle(fontSize: 12)),
+              onTap: onLogout,
             ),
-            title: Text(
-              context.watch<SupabaseConfigService>().isSupabaseReady
-                  ? 'Supabase actif'
-                  : 'Configurer sync',
-              style: const TextStyle(fontSize: 12),
-            ),
-            onTap: onSupabase,
-          ),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.logout_outlined),
-            title: const Text('Déconnexion', style: TextStyle(fontSize: 12)),
-            onTap: onLogout,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -3,11 +3,15 @@
 // OBJECTBOX STORE — Singleton, source de vérité locale absolue
 // ══════════════════════════════════════════════════════════════════════════════
 
-import 'package:objectbox/objectbox.dart';
-import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'entities.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../../objectbox.g.dart'; // Généré par build_runner
+import 'entities.dart';
 
 class ObjectBoxStore {
   static late final ObjectBoxStore _instance;
@@ -41,7 +45,10 @@ class ObjectBoxStore {
   ObjectBoxStore._();
 
   static ObjectBoxStore get instance {
-    assert(_initialized, 'ObjectBoxStore non initialisé — appeler initialize()');
+    assert(
+      _initialized,
+      'ObjectBoxStore non initialisé — appeler initialize()',
+    );
     return _instance;
   }
 
@@ -84,12 +91,20 @@ class ObjectBoxStore {
 
     // Initialiser les séquences si première installation
     await _initSequences();
+
+    // Créer les données de base (Comptes de test)
+    await _seedInitialData();
   }
 
   Future<void> _initSequences() async {
     final seqs = [
-      'inventaire', 'bc', 'facture', 'dotation', 'reception',
-      'fournisseur', 'article',
+      'inventaire',
+      'bc',
+      'facture',
+      'dotation',
+      'reception',
+      'fournisseur',
+      'article',
     ];
 
     for (final nom in seqs) {
@@ -102,6 +117,49 @@ class ObjectBoxStore {
         sequences.put(SequenceEntity(nom: nom, valeur: 0));
       }
     }
+  }
+
+  /// Crée les comptes et données de base nécessaires au 1er démarrage
+  Future<void> _seedInitialData() async {
+    // On s'assure que les deux comptes de test existent avec le bon format
+    _ensureUser('admin', 'admin', 'Administrateur Système', 'admin');
+    _ensureUser('test', 'test', 'Utilisateur de Test', 'consultation');
+  }
+
+  void _ensureUser(String matricule, String password, String nom, String role) {
+    final existing = utilisateurs
+        .query(UtilisateurEntity_.matricule.equals(matricule))
+        .build()
+        .findFirst();
+
+    // Si l'utilisateur n'existe pas, ou si son mot de passe n'a pas le format attendu "salt:hash"
+    if (existing == null ||
+        existing.passwordHash == null ||
+        !existing.passwordHash!.contains(':')) {
+      if (existing != null) {
+        utilisateurs.remove(existing.id);
+      }
+      _createUser(matricule, password, nom, role);
+    }
+  }
+
+  void _createUser(String matricule, String password, String nom, String role) {
+    final salt = const Uuid().v4();
+    final bytes = utf8.encode('$password:$salt:HOPITAL_SECURE');
+    final hash = sha256.convert(bytes).toString();
+
+    final user = UtilisateurEntity()
+      ..uuid = const Uuid().v4()
+      ..matricule = matricule
+      ..nomComplet = nom
+      ..role = role
+      ..passwordHash = '$salt:$hash'
+      ..actif = true
+      ..createdAt = DateTime.now()
+      ..updatedAt = DateTime.now()
+      ..syncStatus = 'synced';
+
+    utilisateurs.put(user);
   }
 
   // ── Transaction utilitaire ──

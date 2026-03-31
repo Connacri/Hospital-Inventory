@@ -75,6 +75,9 @@ class AppSettingsEntity {
   String deviceId = '';
   String deviceType = 'desktop'; // 'desktop' | 'android'
 
+  bool isProvisioned = false; // Nouveau: est-ce que le terminal est approuvé?
+  String? provisionedBy;      // UUID de l'admin qui a scanné le QR
+
   @Property(type: PropertyType.date)
   DateTime updatedAt = DateTime.now();
 }
@@ -179,6 +182,22 @@ class UtilisateurEntity {
 
   @Property(type: PropertyType.date)
   DateTime createdAt = DateTime.now();
+
+  Map<String, dynamic> toSupabaseMap() => {
+    'uuid': uuid,
+    'nom_complet': nomComplet,
+    'matricule': matricule,
+    'email': email,
+    'service_uuid': serviceUuid,
+    'role': role,
+    'actif': actif,
+    'password_hash': passwordHash,
+    'salt': salt,
+    'is_deleted': isDeleted,
+    'device_id': deviceId,
+    'updated_at': updatedAt.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

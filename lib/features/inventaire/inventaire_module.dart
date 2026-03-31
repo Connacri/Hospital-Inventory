@@ -193,9 +193,11 @@ class InventaireProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   void loadAll() {
+    _isLoading = true;
     _articles = _filterStatut == 'tous'
         ? _repo.getAll()
         : _repo.getByStatut(_filterStatut);
+    _isLoading = false;
     notifyListeners();
   }
 
@@ -449,7 +451,11 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<InventaireProvider>().loadAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<InventaireProvider>().loadAll();
+      }
+    });
   }
 
   @override
@@ -484,7 +490,9 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
 
           // ── Liste ──
           Expanded(
-            child: provider.articles.isEmpty
+            child: provider.isLoading 
+              ? const Center(child: CircularProgressIndicator())
+              : provider.articles.isEmpty
                 ? const Center(child: Text('Aucun article dans l\'inventaire'))
                 : ListView.separated(
                     padding: const EdgeInsets.all(12),
