@@ -2,7 +2,7 @@ name: plateau
 description: "A new Inventaire project."
 publish_to: 'none'
 
-version: 1.0.0+4
+version: 1.0.0+7
 
 environment:
   sdk: ^3.10.4
