@@ -1,0 +1,1679 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:8803819276152080977",
+      "lastPropertyId": "14:706064707029526780",
+      "name": "AffectationEntity",
+      "properties": [
+        {
+          "id": "1:8407132950924077859",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:9152377800200955864",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "1:8328725172324883778"
+        },
+        {
+          "id": "3:407857090419891641",
+          "name": "articleInventaireUuid",
+          "type": 9
+        },
+        {
+          "id": "4:5814125807518320598",
+          "name": "bonDotationUuid",
+          "type": 9
+        },
+        {
+          "id": "5:1875329816813884206",
+          "name": "serviceUuid",
+          "type": 9
+        },
+        {
+          "id": "6:4306437331255175733",
+          "name": "dateAffectation",
+          "type": 10
+        },
+        {
+          "id": "7:2636695437693608998",
+          "name": "dateRetour",
+          "type": 10
+        },
+        {
+          "id": "8:3924111785177509739",
+          "name": "motifRetour",
+          "type": 9
+        },
+        {
+          "id": "9:7525095760396117222",
+          "name": "affecteParUuid",
+          "type": 9
+        },
+        {
+          "id": "10:7508817850430965792",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "11:6366130623853673379",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "12:4281983618497877356",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "13:6114068783600945205",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "14:706064707029526780",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:1510095067643859351",
+      "lastPropertyId": "10:6336422921315993993",
+      "name": "AppSettingsEntity",
+      "properties": [
+        {
+          "id": "1:1040234731373199434",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4256892905698749804",
+          "name": "activeSupabaseConfigId",
+          "type": 6
+        },
+        {
+          "id": "3:131635642444560901",
+          "name": "syncEnabled",
+          "type": 1
+        },
+        {
+          "id": "4:5424631622035317161",
+          "name": "syncOnEveryWrite",
+          "type": 1
+        },
+        {
+          "id": "5:4064142010594722848",
+          "name": "syncIntervalMinutes",
+          "type": 6
+        },
+        {
+          "id": "6:8259370679334061289",
+          "name": "requirePinForConfig",
+          "type": 1
+        },
+        {
+          "id": "7:6058678098065322397",
+          "name": "adminPinHash",
+          "type": 9
+        },
+        {
+          "id": "8:3075695979550660971",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "9:6125458057290230442",
+          "name": "deviceType",
+          "type": 9
+        },
+        {
+          "id": "10:6336422921315993993",
+          "name": "updatedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:7791159834150499618",
+      "lastPropertyId": "19:1964793866467393207",
+      "name": "ArticleEntity",
+      "properties": [
+        {
+          "id": "1:7706680184188657991",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4119163359780263561",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "2:2358526506338610632"
+        },
+        {
+          "id": "3:7014862020415989471",
+          "name": "codeArticle",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "3:5186231021516720374"
+        },
+        {
+          "id": "4:99587520481112703",
+          "name": "designation",
+          "type": 9
+        },
+        {
+          "id": "5:159080570684131089",
+          "name": "description",
+          "type": 9
+        },
+        {
+          "id": "6:4383328783298842637",
+          "name": "categorieUuid",
+          "type": 9
+        },
+        {
+          "id": "7:1342324928836952928",
+          "name": "uniteMesure",
+          "type": 9
+        },
+        {
+          "id": "8:7460604617092943853",
+          "name": "codeGtin",
+          "type": 9
+        },
+        {
+          "id": "9:2020246912719363666",
+          "name": "codeUnspsc",
+          "type": 9
+        },
+        {
+          "id": "10:3897481812733284351",
+          "name": "prixUnitaireMoyen",
+          "type": 8
+        },
+        {
+          "id": "11:8394408867592905214",
+          "name": "stockActuel",
+          "type": 6
+        },
+        {
+          "id": "12:6804558408297822647",
+          "name": "stockMinimum",
+          "type": 6
+        },
+        {
+          "id": "13:8719388619722687261",
+          "name": "estSerialise",
+          "type": 1
+        },
+        {
+          "id": "14:2937746340830145007",
+          "name": "actif",
+          "type": 1
+        },
+        {
+          "id": "15:9028762162350382747",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "16:5921614542157038429",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "17:6371034018492494486",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "18:1580212324460775844",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "19:1964793866467393207",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:6379941622293605336",
+      "lastPropertyId": "25:7292371386221679412",
+      "name": "ArticleInventaireEntity",
+      "properties": [
+        {
+          "id": "1:645359692883354661",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5130156761020029096",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "4:3546610607799358769"
+        },
+        {
+          "id": "3:6068542070532634626",
+          "name": "numeroInventaire",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "5:1834298521328490605"
+        },
+        {
+          "id": "4:4309404094668990469",
+          "name": "qrCodeInterne",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "6:4962339491846878217"
+        },
+        {
+          "id": "5:734712204441944425",
+          "name": "articleUuid",
+          "type": 9
+        },
+        {
+          "id": "6:5547498085301545622",
+          "name": "ficheReceptionUuid",
+          "type": 9
+        },
+        {
+          "id": "7:4412829188573409984",
+          "name": "ligneReceptionUuid",
+          "type": 9
+        },
+        {
+          "id": "8:3421635505471404766",
+          "name": "serviceUuid",
+          "type": 9
+        },
+        {
+          "id": "9:3852159661836958322",
+          "name": "numeroSerieOrigine",
+          "type": 9
+        },
+        {
+          "id": "10:5801462925274455028",
+          "name": "etiquetteImprimee",
+          "type": 1
+        },
+        {
+          "id": "11:4377729631426382196",
+          "name": "statut",
+          "type": 9
+        },
+        {
+          "id": "12:7342159073693499353",
+          "name": "etatPhysique",
+          "type": 9
+        },
+        {
+          "id": "13:8208754944681024209",
+          "name": "localisationPrecise",
+          "type": 9
+        },
+        {
+          "id": "14:4241492668305130215",
+          "name": "valeurAcquisition",
+          "type": 8
+        },
+        {
+          "id": "15:1108710997746215819",
+          "name": "valeurNetteComptable",
+          "type": 8
+        },
+        {
+          "id": "16:5025606544955774240",
+          "name": "dateMiseService",
+          "type": 10
+        },
+        {
+          "id": "17:5157622512691044699",
+          "name": "dateDerniereMaintenance",
+          "type": 10
+        },
+        {
+          "id": "18:6581122242898906516",
+          "name": "dateProchaineMaintenace",
+          "type": 10
+        },
+        {
+          "id": "19:5448733448623184180",
+          "name": "observations",
+          "type": 9
+        },
+        {
+          "id": "20:8389666132396516699",
+          "name": "createdByUuid",
+          "type": 9
+        },
+        {
+          "id": "21:8810238558266172191",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "22:9216043365302450037",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "23:5963538381396672549",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "24:6563949169009756545",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "25:7292371386221679412",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:3609263546846311396",
+      "lastPropertyId": "15:2145869996319830617",
+      "name": "BonCommandeEntity",
+      "properties": [
+        {
+          "id": "1:4514549938753925105",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8425785641689576277",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "7:8287102358273291691"
+        },
+        {
+          "id": "3:5911614872385365033",
+          "name": "numeroBc",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "8:5417771730163712946"
+        },
+        {
+          "id": "4:3278950165374524498",
+          "name": "fournisseurUuid",
+          "type": 9
+        },
+        {
+          "id": "5:2561552381590220128",
+          "name": "dateBc",
+          "type": 10
+        },
+        {
+          "id": "6:6509584439948316246",
+          "name": "dateLivraisonPrev",
+          "type": 10
+        },
+        {
+          "id": "7:4050540153762741171",
+          "name": "montantTotal",
+          "type": 8
+        },
+        {
+          "id": "8:2784049292660732444",
+          "name": "statut",
+          "type": 9
+        },
+        {
+          "id": "9:4553339146960350867",
+          "name": "observations",
+          "type": 9
+        },
+        {
+          "id": "10:622283725989861327",
+          "name": "createdByUuid",
+          "type": 9
+        },
+        {
+          "id": "11:8783142473280370454",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "12:8503392887691491462",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "13:7620500796037457228",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "14:1529773040675966886",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "15:2145869996319830617",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "6:2619783273427820250",
+      "lastPropertyId": "15:723984933179078692",
+      "name": "BonDotationEntity",
+      "properties": [
+        {
+          "id": "1:886662496921481169",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1810801647906246667",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "9:4553933364653195254"
+        },
+        {
+          "id": "3:1701063868802059762",
+          "name": "numeroBd",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "10:8014200134032053744"
+        },
+        {
+          "id": "4:6875305116265463377",
+          "name": "serviceDemandeurUuid",
+          "type": 9
+        },
+        {
+          "id": "5:1394837287300118121",
+          "name": "dateDemande",
+          "type": 10
+        },
+        {
+          "id": "6:5597161846918710317",
+          "name": "dateDotation",
+          "type": 10
+        },
+        {
+          "id": "7:383345277225017220",
+          "name": "statut",
+          "type": 9
+        },
+        {
+          "id": "8:8930624800946444147",
+          "name": "motif",
+          "type": 9
+        },
+        {
+          "id": "9:8147117488146832639",
+          "name": "approuveParUuid",
+          "type": 9
+        },
+        {
+          "id": "10:7116233430770869734",
+          "name": "createdByUuid",
+          "type": 9
+        },
+        {
+          "id": "11:3723784140144128864",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "12:6485882457367275810",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "13:1847355280470302662",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "14:1157910161988079401",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "15:723984933179078692",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "7:4586202003910385297",
+      "lastPropertyId": "13:4299797538022116853",
+      "name": "CategorieArticleEntity",
+      "properties": [
+        {
+          "id": "1:1784543945520298021",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3373322762144766124",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "11:8281654636875840769"
+        },
+        {
+          "id": "3:1302742984875919130",
+          "name": "code",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "12:3602052217341781550"
+        },
+        {
+          "id": "4:3491411276101609037",
+          "name": "libelle",
+          "type": 9
+        },
+        {
+          "id": "5:3458436616945545664",
+          "name": "type",
+          "type": 9
+        },
+        {
+          "id": "6:6503973047660448468",
+          "name": "dureeAmortMois",
+          "type": 6
+        },
+        {
+          "id": "7:5987018935481904787",
+          "name": "methodeAmort",
+          "type": 9
+        },
+        {
+          "id": "8:2818279857575561234",
+          "name": "seuilAlerteStock",
+          "type": 6
+        },
+        {
+          "id": "9:8379186365398379995",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "10:1528557060439130515",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "11:9037280747701999619",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "12:3618678501651124232",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "13:4299797538022116853",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "8:2099672773835095489",
+      "lastPropertyId": "13:727725682449453272",
+      "name": "ConflictEntity",
+      "properties": [
+        {
+          "id": "1:6220533534417958918",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:800623943156161053",
+          "name": "conflictId",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "13:332352042611276235"
+        },
+        {
+          "id": "3:84804193683419527",
+          "name": "tableName",
+          "type": 9
+        },
+        {
+          "id": "4:7321073979794955438",
+          "name": "recordUuid",
+          "type": 9
+        },
+        {
+          "id": "5:6080514251531302867",
+          "name": "localPayload",
+          "type": 9
+        },
+        {
+          "id": "6:5280219139548934369",
+          "name": "remotePayload",
+          "type": 9
+        },
+        {
+          "id": "7:4110670098914535557",
+          "name": "localDeviceId",
+          "type": 9
+        },
+        {
+          "id": "8:857913225318222656",
+          "name": "remoteDeviceId",
+          "type": 9
+        },
+        {
+          "id": "9:7602916172807645471",
+          "name": "status",
+          "type": 9
+        },
+        {
+          "id": "10:7010758524250124404",
+          "name": "resolvedByUuid",
+          "type": 9
+        },
+        {
+          "id": "11:1332638949759380181",
+          "name": "resolvedPayload",
+          "type": 9
+        },
+        {
+          "id": "12:6257452727315191252",
+          "name": "detectedAt",
+          "type": 10
+        },
+        {
+          "id": "13:727725682449453272",
+          "name": "resolvedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "9:1913183710285711781",
+      "lastPropertyId": "19:4090796093906717458",
+      "name": "FactureEntity",
+      "properties": [
+        {
+          "id": "1:6263180362766516298",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:749348851342266205",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "14:637403594793360023"
+        },
+        {
+          "id": "3:5615602597050242273",
+          "name": "numeroFacture",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "15:6374890229993008092"
+        },
+        {
+          "id": "4:7169137057664362875",
+          "name": "numeroInterne",
+          "type": 9
+        },
+        {
+          "id": "5:1688579811823927218",
+          "name": "fournisseurUuid",
+          "type": 9
+        },
+        {
+          "id": "6:8721353846716686877",
+          "name": "bcUuid",
+          "type": 9
+        },
+        {
+          "id": "7:3702837037070620162",
+          "name": "dateFacture",
+          "type": 10
+        },
+        {
+          "id": "8:1867171579918559109",
+          "name": "dateReception",
+          "type": 10
+        },
+        {
+          "id": "9:2849997098079656119",
+          "name": "montantHt",
+          "type": 8
+        },
+        {
+          "id": "10:8250822992159373460",
+          "name": "tva",
+          "type": 8
+        },
+        {
+          "id": "11:9004824449880762258",
+          "name": "montantTtc",
+          "type": 8
+        },
+        {
+          "id": "12:7571444502323328016",
+          "name": "statut",
+          "type": 9
+        },
+        {
+          "id": "13:1956970913995314961",
+          "name": "fichierPdfUrl",
+          "type": 9
+        },
+        {
+          "id": "14:4113976758941108934",
+          "name": "createdByUuid",
+          "type": 9
+        },
+        {
+          "id": "15:7825358148670055628",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "16:8049660566333540218",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "17:5789784060670747665",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "18:290694601464275071",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "19:4090796093906717458",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "10:1785795859114626456",
+      "lastPropertyId": "15:4091085987968212075",
+      "name": "FicheReceptionEntity",
+      "properties": [
+        {
+          "id": "1:278992097400301514",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4210434243553740321",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "16:3192193977787460548"
+        },
+        {
+          "id": "3:9061039142386434949",
+          "name": "numeroFr",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "17:6081623051318168367"
+        },
+        {
+          "id": "4:5462097023610460806",
+          "name": "factureUuid",
+          "type": 9
+        },
+        {
+          "id": "5:2613378564339773614",
+          "name": "dateReception",
+          "type": 10
+        },
+        {
+          "id": "6:3768523511271719608",
+          "name": "statut",
+          "type": 9
+        },
+        {
+          "id": "7:2963760457555610364",
+          "name": "observations",
+          "type": 9
+        },
+        {
+          "id": "8:1029196621273815569",
+          "name": "createdByUuid",
+          "type": 9
+        },
+        {
+          "id": "9:6837788658382956360",
+          "name": "validatedByUuid",
+          "type": 9
+        },
+        {
+          "id": "10:1806855210851363501",
+          "name": "validatedAt",
+          "type": 10
+        },
+        {
+          "id": "11:5409986065200938721",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "12:7987387428675710511",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "13:2117602016493251258",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "14:2165795078798111420",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "15:4091085987968212075",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "11:2231202125689310778",
+      "lastPropertyId": "18:3204541921207670985",
+      "name": "FournisseurEntity",
+      "properties": [
+        {
+          "id": "1:4417670446601088736",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4642080047072686249",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "18:8782892271940809271"
+        },
+        {
+          "id": "3:8351203277666129631",
+          "name": "code",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "19:4068943903120767063"
+        },
+        {
+          "id": "4:3793437597800098503",
+          "name": "raisonSociale",
+          "type": 9
+        },
+        {
+          "id": "5:1278081845339476440",
+          "name": "rc",
+          "type": 9
+        },
+        {
+          "id": "6:56618576028562356",
+          "name": "nif",
+          "type": 9
+        },
+        {
+          "id": "7:3039819991578146465",
+          "name": "adresse",
+          "type": 9
+        },
+        {
+          "id": "8:4357909993321075456",
+          "name": "telephone",
+          "type": 9
+        },
+        {
+          "id": "9:9080476769518138075",
+          "name": "email",
+          "type": 9
+        },
+        {
+          "id": "10:1444259216075011102",
+          "name": "rib",
+          "type": 9
+        },
+        {
+          "id": "11:1722194578725336900",
+          "name": "conditionsPaiement",
+          "type": 6
+        },
+        {
+          "id": "12:5133883071365644550",
+          "name": "actif",
+          "type": 1
+        },
+        {
+          "id": "13:2857820930302150595",
+          "name": "observations",
+          "type": 9
+        },
+        {
+          "id": "14:9021315145609183015",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "15:7099737074611959763",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "16:3428862359759518798",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "17:882387521467927639",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "18:3204541921207670985",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "12:5218383454154065218",
+      "lastPropertyId": "15:4861122900364506975",
+      "name": "HistoriqueMouvementEntity",
+      "properties": [
+        {
+          "id": "1:7588435069519731106",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:506865544690484099",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "20:8206435474049332191"
+        },
+        {
+          "id": "3:8139905450729557068",
+          "name": "articleInventaireUuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "21:1899759894964317579"
+        },
+        {
+          "id": "4:8181312229912359637",
+          "name": "typeMouvement",
+          "type": 9
+        },
+        {
+          "id": "5:7616308252784295274",
+          "name": "serviceSourceUuid",
+          "type": 9
+        },
+        {
+          "id": "6:1152200997640687087",
+          "name": "serviceDestUuid",
+          "type": 9
+        },
+        {
+          "id": "7:4748994805552917462",
+          "name": "statutAvant",
+          "type": 9
+        },
+        {
+          "id": "8:2783851359950471712",
+          "name": "statutApres",
+          "type": 9
+        },
+        {
+          "id": "9:3960462597657945798",
+          "name": "documentRef",
+          "type": 9
+        },
+        {
+          "id": "10:3173978131165206898",
+          "name": "effectueParUuid",
+          "type": 9
+        },
+        {
+          "id": "11:9031720688317269948",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "12:974446194862582165",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "13:313032259369892643",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "14:6663861381772676061",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "15:4861122900364506975",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "13:5754123793449760919",
+      "lastPropertyId": "11:5084732360267983898",
+      "name": "LigneDotationEntity",
+      "properties": [
+        {
+          "id": "1:2306864774399543468",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4874062356998941125",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "22:8815113522407301884"
+        },
+        {
+          "id": "3:8237380538734523796",
+          "name": "bonDotationUuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "23:2620043357665542704"
+        },
+        {
+          "id": "4:6912932901106314793",
+          "name": "articleUuid",
+          "type": 9
+        },
+        {
+          "id": "5:8495234632581075574",
+          "name": "quantiteDemandee",
+          "type": 6
+        },
+        {
+          "id": "6:2316051148559129198",
+          "name": "quantiteAttribuee",
+          "type": 6
+        },
+        {
+          "id": "7:6301255895298276107",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "8:123104204473086130",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "9:1456307710813334776",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "10:3625020701924787025",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "11:5084732360267983898",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "14:361285953395714588",
+      "lastPropertyId": "11:2127414357074752246",
+      "name": "LigneFactureEntity",
+      "properties": [
+        {
+          "id": "1:7996671837781087811",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:560466327664433075",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "24:5797026187452002609"
+        },
+        {
+          "id": "3:867489788232455444",
+          "name": "factureUuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "25:229581772574822884"
+        },
+        {
+          "id": "4:948216302926606233",
+          "name": "articleUuid",
+          "type": 9
+        },
+        {
+          "id": "5:8946404790403818419",
+          "name": "quantite",
+          "type": 6
+        },
+        {
+          "id": "6:2862672472465719077",
+          "name": "prixUnitaire",
+          "type": 8
+        },
+        {
+          "id": "7:3143844587458384277",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "8:4350882088949595296",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "9:2779893678360704238",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "10:879273632383493879",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "11:2127414357074752246",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "15:8489373673648839457",
+      "lastPropertyId": "14:2233185741524396337",
+      "name": "LigneReceptionEntity",
+      "properties": [
+        {
+          "id": "1:8980175892471569631",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4332318720202585390",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "26:2052956290661542864"
+        },
+        {
+          "id": "3:8618059944714108289",
+          "name": "ficheUuid",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "27:6115551977251382398"
+        },
+        {
+          "id": "4:210817188884514142",
+          "name": "articleUuid",
+          "type": 9
+        },
+        {
+          "id": "5:5698829695260724068",
+          "name": "quantiteAttendue",
+          "type": 6
+        },
+        {
+          "id": "6:4645294069520369814",
+          "name": "quantiteRecue",
+          "type": 6
+        },
+        {
+          "id": "7:2372551168171551765",
+          "name": "quantiteRejetee",
+          "type": 6
+        },
+        {
+          "id": "8:7753392428052623285",
+          "name": "motifRejet",
+          "type": 9
+        },
+        {
+          "id": "9:3784957810483907202",
+          "name": "etatArticle",
+          "type": 9
+        },
+        {
+          "id": "10:264773511752797120",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "11:5596595661752406351",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "12:4871463172826584468",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "13:4147589351636176084",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "14:2233185741524396337",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "16:5809689485005743412",
+      "lastPropertyId": "3:5581428440214328457",
+      "name": "SequenceEntity",
+      "properties": [
+        {
+          "id": "1:1750280906559639722",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8758519136230739299",
+          "name": "nom",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "28:6827850613201620384"
+        },
+        {
+          "id": "3:5581428440214328457",
+          "name": "valeur",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "17:7453233536597115269",
+      "lastPropertyId": "13:6118839001312225801",
+      "name": "ServiceHopitalEntity",
+      "properties": [
+        {
+          "id": "1:4060922521846566633",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6461924322881618478",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "29:6131813906161247126"
+        },
+        {
+          "id": "3:7760387353019236247",
+          "name": "code",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "30:7096651218233602022"
+        },
+        {
+          "id": "4:570147562054676686",
+          "name": "libelle",
+          "type": 9
+        },
+        {
+          "id": "5:5849389829902513762",
+          "name": "batiment",
+          "type": 9
+        },
+        {
+          "id": "6:4244436670436169274",
+          "name": "etage",
+          "type": 9
+        },
+        {
+          "id": "7:1786862106867179265",
+          "name": "responsable",
+          "type": 9
+        },
+        {
+          "id": "8:2961861566577803666",
+          "name": "actif",
+          "type": 1
+        },
+        {
+          "id": "9:536940812942852803",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "10:8021622717408948927",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "11:5372417198418118632",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "12:4526717730199743269",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "13:6118839001312225801",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "18:7584859706287710874",
+      "lastPropertyId": "12:9135420237621841395",
+      "name": "SupabaseConfigEntity",
+      "properties": [
+        {
+          "id": "1:6761418112754269556",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2548095229545535304",
+          "name": "configId",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "31:937548376289244074"
+        },
+        {
+          "id": "3:7071035563939010083",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "4:857729837211599387",
+          "name": "url",
+          "type": 9
+        },
+        {
+          "id": "5:8666803542045911944",
+          "name": "anonKey",
+          "type": 9
+        },
+        {
+          "id": "6:1912032981900517941",
+          "name": "serviceRoleKey",
+          "type": 9
+        },
+        {
+          "id": "7:5656562700010144739",
+          "name": "isActive",
+          "type": 1
+        },
+        {
+          "id": "8:6752691798870512748",
+          "name": "isVerified",
+          "type": 1
+        },
+        {
+          "id": "9:3151062863301228173",
+          "name": "lastTestedAt",
+          "type": 10
+        },
+        {
+          "id": "10:1598238740512752551",
+          "name": "lastSuccessfulSyncAt",
+          "type": 10
+        },
+        {
+          "id": "11:6395490776304373708",
+          "name": "testError",
+          "type": 9
+        },
+        {
+          "id": "12:9135420237621841395",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "19:6265102374009521750",
+      "lastPropertyId": "13:7776619585558803091",
+      "name": "SyncQueueEntity",
+      "properties": [
+        {
+          "id": "1:3322376663922922279",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5028376731121241497",
+          "name": "operationId",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "32:1771499133979841369"
+        },
+        {
+          "id": "3:3218544961411462804",
+          "name": "tableName",
+          "type": 9
+        },
+        {
+          "id": "4:4130656956768989687",
+          "name": "recordUuid",
+          "type": 9
+        },
+        {
+          "id": "5:5493269335488762164",
+          "name": "operation",
+          "type": 9
+        },
+        {
+          "id": "6:2640087903215294444",
+          "name": "payload",
+          "type": 9
+        },
+        {
+          "id": "7:303994138940430516",
+          "name": "deviceId",
+          "type": 9
+        },
+        {
+          "id": "8:7435893442347904050",
+          "name": "deviceType",
+          "type": 9
+        },
+        {
+          "id": "9:7750386472106240329",
+          "name": "retryCount",
+          "type": 6
+        },
+        {
+          "id": "10:102776711194412380",
+          "name": "status",
+          "type": 9
+        },
+        {
+          "id": "11:3250741269433839548",
+          "name": "errorMessage",
+          "type": 9
+        },
+        {
+          "id": "12:3615470502982642675",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "13:7776619585558803091",
+          "name": "pushedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "20:1923927036595794658",
+      "lastPropertyId": "15:5971244686279116080",
+      "name": "UtilisateurEntity",
+      "properties": [
+        {
+          "id": "1:1147149375044833970",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:29228396612198968",
+          "name": "uuid",
+          "type": 9,
+          "flags": 2080,
+          "indexId": "33:421385411343649801"
+        },
+        {
+          "id": "3:7532339478260084396",
+          "name": "supabaseUserId",
+          "type": 9
+        },
+        {
+          "id": "4:8297813580206476445",
+          "name": "nomComplet",
+          "type": 9
+        },
+        {
+          "id": "5:2772455871011389167",
+          "name": "matricule",
+          "type": 9
+        },
+        {
+          "id": "6:599225954546914230",
+          "name": "email",
+          "type": 9
+        },
+        {
+          "id": "7:7909651004542210919",
+          "name": "serviceUuid",
+          "type": 9
+        },
+        {
+          "id": "8:8689485659727543868",
+          "name": "role",
+          "type": 9
+        },
+        {
+          "id": "9:3453323536224886425",
+          "name": "actif",
+          "type": 1
+        },
+        {
+          "id": "10:4060064298901228095",
+          "name": "passwordHash",
+          "type": 9
+        },
+        {
+          "id": "11:2936113980678129553",
+          "name": "derniereConnexion",
+          "type": 10
+        },
+        {
+          "id": "12:677859145859069555",
+          "name": "syncStatus",
+          "type": 9
+        },
+        {
+          "id": "13:3341343398221169010",
+          "name": "isDeleted",
+          "type": 1
+        },
+        {
+          "id": "14:2227656302433333377",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "15:5971244686279116080",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "20:1923927036595794658",
+  "lastIndexId": "33:421385411343649801",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
