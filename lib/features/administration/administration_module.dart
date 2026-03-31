@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/repositories/base_repository.dart';
+import '../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
 import '../articles/article_module.dart';
 
@@ -108,14 +110,83 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 🚀 PEUPLER LA BASE DE DONNÉES AVEC DES DONNÉES DE TEST
+  Future<void> populateMockData() async {
+    _isLoading = true;
+    notifyListeners();
+
+    final store = ObjectBoxStore.instance;
+    final now = DateTime.now();
+
+    // 1. Services
+    if (store.services.isEmpty()) {
+      final srvs = [
+        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-URG'..libelle = 'Urgences Médicales'..batiment = 'Bloc A'..etage = 'RDC',
+        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-CHI'..libelle = 'Chirurgie Générale'..batiment = 'Bloc B'..etage = '2ème',
+        ServiceHopitalEntity()..uuid = const Uuid().v4()..code = 'SRV-PED'..libelle = 'Pédiatrie'..batiment = 'Bloc C'..etage = '1er',
+      ];
+      store.services.putMany(srvs);
+    }
+
+    // 2. Catégories
+    if (store.categories.isEmpty()) {
+      final cats = [
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-CON'..libelle = 'Consommables'..type = 'consommable',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-MOB'..libelle = 'Mobilier de bureau'..type = 'immobilisation',
+        CategorieArticleEntity()..uuid = const Uuid().v4()..code = 'CAT-MED'..libelle = 'Équipement Médical'..type = 'equipement_medical',
+      ];
+      store.categories.putMany(cats);
+    }
+
+    // 3. Fournisseurs
+    if (store.fournisseurs.isEmpty()) {
+      final fours = [
+        FournisseurEntity()..uuid = const Uuid().v4()..code = 'F-001'..raisonSociale = 'Pharmal Algérie'..email = 'contact@pharmal.dz'..actif = true,
+        FournisseurEntity()..uuid = const Uuid().v4()..code = 'F-002'..raisonSociale = 'MedEquip Pro'..telephone = '021 00 00 00'..actif = true,
+      ];
+      store.fournisseurs.putMany(fours);
+    }
+
+    // 4. Articles (Modèles)
+    if (store.articles.isEmpty()) {
+      final catCons = store.categories.query(CategorieArticleEntity_.code.equals('CAT-CON')).build().findFirst();
+      final catMob = store.categories.query(CategorieArticleEntity_.code.equals('CAT-MOB')).build().findFirst();
+
+      if (catCons != null && catMob != null) {
+        final arts = [
+          ArticleEntity()
+            ..uuid = const Uuid().v4()
+            ..codeArticle = 'ART-001'
+            ..designation = 'Seringue 5ml'
+            ..categorieUuid = catCons.uuid
+            ..uniteMesure = 'Boite 100'
+            ..stockMinimum = 10,
+          ArticleEntity()
+            ..uuid = const Uuid().v4()
+            ..codeArticle = 'ART-002'
+            ..designation = 'Chaise Ergonomique'
+            ..categorieUuid = catMob.uuid
+            ..uniteMesure = 'unité'
+            ..estSerialise = true,
+        ];
+        store.articles.putMany(arts);
+      }
+    }
+
+    _isLoading = false;
+    loadAll();
+  }
+
   Future<void> saveService(ServiceHopitalEntity s) async {
-    if (s.id == 0) {
+    if (srvId(s) == 0) {
       await _serviceRepo.insert(s);
     } else {
       await _serviceRepo.update(s);
     }
     loadAll();
   }
+
+  int srvId(ServiceHopitalEntity s) => s.id;
 
   Future<void> deleteService(String uuid) async {
     await _serviceRepo.delete(uuid);
@@ -276,7 +347,16 @@ class _UsersListScreenState extends State<UsersListScreen> {
   Widget build(BuildContext context) {
     final admin = context.watch<AdminProvider>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Gestion des utilisateurs')),
+      appBar: AppBar(
+        title: const Text('Gestion des utilisateurs'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.build_circle_outlined),
+            tooltip: 'Peupler la base (Test)',
+            onPressed: () => _confirmPopulate(context),
+          ),
+        ],
+      ),
       body: admin.isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
@@ -299,6 +379,26 @@ class _UsersListScreenState extends State<UsersListScreen> {
         onPressed: () => _openRegister(),
         icon: const Icon(Icons.person_add),
         label: const Text('Nouvel utilisateur'),
+      ),
+    );
+  }
+
+  void _confirmPopulate(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Peupler la base ?'),
+        content: const Text('Cela ajoutera des services, catégories, fournisseurs et articles de test.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () {
+              context.read<AdminProvider>().populateMockData();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Confirmer'),
+          ),
+        ],
       ),
     );
   }

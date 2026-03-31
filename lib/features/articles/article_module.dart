@@ -214,6 +214,21 @@ class ArticleProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<CategorieArticleEntity> createCategorie({
+    required String libelle,
+    required String code,
+    required String type,
+  }) async {
+    final cat = CategorieArticleEntity()
+      ..libelle = libelle
+      ..code = code
+      ..type = type;
+    
+    final saved = await _catRepo.insert(cat);
+    loadAll();
+    return saved;
+  }
+
   Future<ArticleEntity> create({
     required String designation,
     required String categorieUuid,
@@ -711,13 +726,24 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
       Row(
         children: [
           Expanded(
-            child: DropdownButtonFormField<String>(
-              isExpanded: true,
-              value: _categorieUuid,
-              decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)),
-              items: provider.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle, overflow: TextOverflow.ellipsis))).toList(),
-              validator: (v) => v == null ? 'Requis' : null,
-              onChanged: (v) => setState(() => _categorieUuid = v),
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    value: _categorieUuid,
+                    decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)),
+                    items: provider.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle))).toList(),
+                    validator: (v) => v == null ? 'Requis' : null,
+                    onChanged: (v) => setState(() => _categorieUuid = v),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                  onPressed: _openCategorieForm,
+                  tooltip: 'Nouvelle catégorie',
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 16),
@@ -779,6 +805,18 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         ),
       ],
     ];
+  }
+
+  void _openCategorieForm() async {
+    final newCat = await showDialog<CategorieArticleEntity>(
+      context: context,
+      builder: (_) => const CategorieFormDialog(),
+    );
+    if (newCat != null) {
+      setState(() {
+        _categorieUuid = newCat.uuid;
+      });
+    }
   }
 
   Widget _buildSerialSection(ThemeData theme, int q) {
@@ -1014,6 +1052,91 @@ class _ContinuousScannerDialogState extends State<ContinuousScannerDialog> {
         FilledButton(onPressed: _scannedCodes.isEmpty ? null : () => Navigator.pop(context, _scannedCodes), child: const Text('Valider')),
       ],
     );
+  }
+}
+
+// ── Dialogue de création de catégorie ──
+
+class CategorieFormDialog extends StatefulWidget {
+  const CategorieFormDialog({super.key});
+
+  @override
+  State<CategorieFormDialog> createState() => _CategorieFormDialogState();
+}
+
+class _CategorieFormDialogState extends State<CategorieFormDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _libelle = TextEditingController();
+  final _code = TextEditingController();
+  String _type = 'consommable';
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _libelle.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nouvelle catégorie'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _libelle,
+              decoration: const InputDecoration(labelText: 'Libellé *'),
+              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _code,
+              decoration: const InputDecoration(labelText: 'Code (ex: MOB, MED) *'),
+              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _type,
+              decoration: const InputDecoration(labelText: 'Type'),
+              items: const [
+                DropdownMenuItem(value: 'consommable', child: Text('Consommable')),
+                DropdownMenuItem(value: 'immobilisation', child: Text('Immobilisation')),
+                DropdownMenuItem(value: 'equipement_medical', child: Text('Équipement médical')),
+              ],
+              onChanged: (v) => setState(() => _type = v!),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Créer'),
+        ),
+      ],
+    );
+  }
+
+  void _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      final cat = await context.read<ArticleProvider>().createCategorie(
+        libelle: _libelle.text.trim(),
+        code: _code.text.trim().toUpperCase(),
+        type: _type,
+      );
+      if (mounted) Navigator.pop(context, cat);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 }
 

@@ -316,7 +316,9 @@ class SupabaseConfigService extends ChangeNotifier {
     _isInitialized = false;
     final current = _client;
     _client = null;
-    await current?.dispose();
+    if (current != null) {
+      await current.dispose();
+    }
     notifyListeners();
   }
 
@@ -381,6 +383,14 @@ class SupabaseConfigService extends ChangeNotifier {
 
       _log.i('Supabase prêt');
     } catch (e) {
+      // Si déjà initialisé avec les mêmes paramètres, on ignore l'erreur
+      if (e.toString().contains('already been initialized')) {
+         _activeConfig = config;
+         _isInitialized = true;
+         _initError = null;
+         return;
+      }
+
       _isInitialized = false;
       _initError = _parseError(e.toString());
       _client = null;

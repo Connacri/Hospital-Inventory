@@ -10,11 +10,11 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/auth/auth_provider.dart';
 import '../../../core/objectbox/entities.dart';
 import '../../../core/objectbox/objectbox_store.dart';
 import '../../../core/services/numero_generator.dart';
 import '../../core/repositories/base_repository.dart';
-import '../reception/reception_module.dart';
 import '../../objectbox.g.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,13 +83,13 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
       .build()
       .findFirst();
 
-  // ── Créer N articles d'un coup (lors de la réception) ──
+  // ── Créer N articles d'un coup (lors de la réception ou stock initial) ──
   Future<List<ArticleInventaireEntity>> creerBatch({
     required String articleUuid,
     required String ficheReceptionUuid,
     required String ligneReceptionUuid,
     required int quantite,
-    required List<String?> serials, // longueur = quantite
+    required List<String?> serials,
     required double valeurUnitaire,
     required String createdByUuid,
   }) async {
@@ -111,15 +111,13 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
         ..etatPhysique = 'neuf'
         ..createdByUuid = createdByUuid;
 
-      // setUuid/setTimestamps via insert
       entity.numeroInventaire = numInv;
       entity.qrCodeInterne = qrInterne;
 
       final saved = await insert(entity);
       created.add(saved);
 
-      // Enregistrer dans l'historique
-      _logMouvement(
+      logMouvement(
         articleInventaireUuid: saved.uuid,
         type: 'entree',
         statutApres: 'en_stock',
@@ -127,11 +125,18 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
         effectueParUuid: createdByUuid,
       );
     }
+    
+    // Mettre à jour le stock actuel de l'article parent
+    final articleRef = ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(articleUuid)).build().findFirst();
+    if (articleRef != null) {
+      articleRef.stockActuel += quantite;
+      ObjectBoxStore.instance.articles.put(articleRef);
+    }
 
     return created;
   }
 
-  void _logMouvement({
+  void logMouvement({
     required String articleInventaireUuid,
     required String type,
     String? serviceSourceUuid,
@@ -207,6 +212,31 @@ class InventaireProvider extends ChangeNotifier {
     loadAll();
   }
 
+  Future<void> updateStatut(ArticleInventaireEntity entity, String newStatut, String userUuid, {String? serviceUuid, String? obs}) async {
+    final oldStatut = entity.statut;
+    final oldService = entity.serviceUuid;
+    
+    entity.statut = newStatut;
+    entity.serviceUuid = serviceUuid ?? entity.serviceUuid;
+    entity.observations = obs ?? entity.observations;
+    entity.updatedAt = DateTime.now();
+    entity.syncStatus = 'pending_push';
+    
+    await _repo.update(entity);
+    
+    _repo.logMouvement(
+      articleInventaireUuid: entity.uuid,
+      type: oldService != serviceUuid ? 'transfert' : 'statut_change',
+      statutAvant: oldStatut,
+      statutApres: newStatut,
+      serviceSourceUuid: oldService,
+      serviceDestUuid: serviceUuid,
+      effectueParUuid: userUuid,
+    );
+    
+    loadAll();
+  }
+
   Future<List<ArticleInventaireEntity>> creerBatch({
     required String articleUuid,
     required String ficheReceptionUuid,
@@ -216,10 +246,7 @@ class InventaireProvider extends ChangeNotifier {
     required double valeurUnitaire,
     required String createdByUuid,
   }) async {
-    _isLoading = true;
-    notifyListeners();
-
-    final result = await _repo.creerBatch(
+    final res = await _repo.creerBatch(
       articleUuid: articleUuid,
       ficheReceptionUuid: ficheReceptionUuid,
       ligneReceptionUuid: ligneReceptionUuid,
@@ -228,22 +255,20 @@ class InventaireProvider extends ChangeNotifier {
       valeurUnitaire: valeurUnitaire,
       createdByUuid: createdByUuid,
     );
-
-    _isLoading = false;
     loadAll();
-    return result;
+    return res;
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET CLEF — Saisie N serials dynamiques selon quantité
+// WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SerialFieldsGenerator extends StatefulWidget {
   final int quantite;
   final String designation;
   final bool estSerialise;
-  final List<TextEditingController>? externalControllers; // Optionnel
+  final List<TextEditingController> externalControllers;
   final void Function(List<String?> serials) onChanged;
 
   const SerialFieldsGenerator({
@@ -252,7 +277,7 @@ class SerialFieldsGenerator extends StatefulWidget {
     required this.designation,
     required this.estSerialise,
     required this.onChanged,
-    this.externalControllers,
+    required this.externalControllers,
   });
 
   @override
@@ -260,111 +285,56 @@ class SerialFieldsGenerator extends StatefulWidget {
 }
 
 class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
-  late List<TextEditingController> _controllers;
-
   @override
   void initState() {
     super.initState();
-    _buildControllers();
-  }
-
-  @override
-  void didUpdateWidget(SerialFieldsGenerator old) {
-    super.didUpdateWidget(old);
-    if (old.quantite != widget.quantite || old.externalControllers != widget.externalControllers) {
-      if (old.externalControllers == null) {
-        for (final c in _controllers) {
-          c.dispose();
-        }
-      }
-      _buildControllers();
-    }
-  }
-
-  void _buildControllers() {
-    if (widget.externalControllers != null) {
-      _controllers = widget.externalControllers!;
-    } else {
-      _controllers = List.generate(
-        widget.quantite,
-        (_) => TextEditingController(),
-      );
-    }
-    for (final c in _controllers) {
+    for (final c in widget.externalControllers) {
       c.addListener(_notify);
     }
   }
 
   void _notify() {
     widget.onChanged(
-      _controllers.map((c) => c.text.isEmpty ? null : c.text).toList(),
+      widget.externalControllers.map((c) => c.text.isEmpty ? null : c.text).toList(),
     );
   }
 
   @override
-  void dispose() {
-    // Ne pas dispose si les contrôleurs viennent de l'extérieur
-    if (widget.externalControllers == null) {
-      for (final c in _controllers) {
-        c.dispose();
-      }
-    }
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // Aperçu des N° inventaires qui seront générés
-    final prochainSeq = NumeroGenerator.apercuProchainInventaire();
-
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // En-tête (FIX: Utilisation de Flexible/Expanded pour éviter l'overflow)
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
           child: Row(
             children: [
               const Icon(Icons.inventory_2_outlined, size: 18),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${widget.quantite} × ${widget.designation}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Dès: $prochainSeq',
-                  style: Theme.of(context).textTheme.labelSmall,
-                  textAlign: TextAlign.right,
-                ),
-              ),
+              Expanded(child: Text('${widget.quantite} × ${widget.designation}', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
         const SizedBox(height: 12),
-
         if (!widget.estSerialise)
           _InfoNonSerialise(quantite: widget.quantite)
         else
-          ...List.generate(
-            widget.quantite,
-            (i) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _SerialRow(
-                index: i,
-                controller: _controllers[i],
-                designation: widget.designation,
-              ).animate().fadeIn(delay: Duration(milliseconds: i * 50)),
+          ...List.generate(widget.quantite, (i) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                CircleAvatar(radius: 14, child: Text('${i+1}', style: const TextStyle(fontSize: 10))),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: widget.externalControllers[i],
+                    decoration: InputDecoration(labelText: 'N° Série Article ${i+1}', isDense: true),
+                  ),
+                ),
+              ],
             ),
-          ),
+          )),
       ],
     );
   }
@@ -373,107 +343,31 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
 class _InfoNonSerialise extends StatelessWidget {
   final int quantite;
   const _InfoNonSerialise({required this.quantite});
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.blue.shade200),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.blue.shade50,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$quantite N° d\'inventaire séquentiels seront générés automatiquement. '
-              'Aucun N° de série fabricant requis.',
-              style: TextStyle(color: Colors.blue.shade700, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SerialRow extends StatelessWidget {
-  final int index;
-  final TextEditingController controller;
-  final String designation;
-
-  const _SerialRow({
-    required this.index,
-    required this.controller,
-    required this.designation,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Badge article N
-        Container(
-          width: 36,
-          height: 36,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            '${index + 1}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSecondaryContainer,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-
-        // Champ serial
-        Expanded(
-          child: TextFormField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText:
-                  'N° Série fabricant — Article ${index + 1} (facultatif)',
-              hintText: 'Ex: SN-ABC-123456',
-              prefixIcon: const Icon(Icons.qr_code, size: 18),
-              isDense: true,
-            ),
-          ),
-        ),
-      ],
+      decoration: BoxDecoration(border: Border.all(color: Colors.blue.shade200), borderRadius: BorderRadius.circular(8), color: Colors.blue.shade50),
+      child: Text('$quantite N° d\'inventaire seront générés automatiquement sans S/N.', style: TextStyle(color: Colors.blue.shade700, fontSize: 12)),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN LISTE INVENTAIRE
+// SCREEN LISTE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class InventaireListScreen extends StatefulWidget {
   const InventaireListScreen({super.key});
-
   @override
   State<InventaireListScreen> createState() => _InventaireListScreenState();
 }
 
 class _InventaireListScreenState extends State<InventaireListScreen> {
-  final _statuts = ['tous', 'en_stock', 'affecte', 'en_maintenance', 'reforme'];
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<InventaireProvider>().loadAll();
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<InventaireProvider>().loadAll());
   }
 
   @override
@@ -483,29 +377,11 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('État général de l\'inventaire'),
+        title: const Text('Inventaire Physique'),
         actions: [
-          // Bouton Réceptionner
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Theme.of(context).colorScheme.primary,
-            ),
-            icon: const Icon(Icons.add_shopping_cart, size: 18),
-            label: const Text('Réceptionner'),
-            onPressed: () => _openReception(context),
-          ),
-          const SizedBox(width: 12),
-          // Filtre statut
           DropdownButton<String>(
             value: provider._filterStatut,
-            underline: const SizedBox(),
-            items: _statuts
-                .map(
-                  (s) =>
-                      DropdownMenuItem(value: s, child: Text(_statutLabel(s))),
-                )
-                .toList(),
+            items: ['tous', 'en_stock', 'affecte', 'en_maintenance', 'reforme'].map((s) => DropdownMenuItem(value: s, child: Text(s.replaceAll('_', ' ').toUpperCase(), style: const TextStyle(fontSize: 12)))).toList(),
             onChanged: (v) => provider.setFilter(v ?? 'tous'),
           ),
           const SizedBox(width: 16),
@@ -513,113 +389,44 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
       ),
       body: Column(
         children: [
-          // ── KPI barre ──
           _InventaireKpiBarre(articles: provider.articles, store: store),
-          const Divider(height: 1),
-
-          // ── Liste ──
           Expanded(
             child: provider.isLoading 
               ? const Center(child: CircularProgressIndicator())
-              : provider.articles.isEmpty
-                ? const Center(child: Text('Aucun article dans l\'inventaire'))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: provider.articles.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
-                    itemBuilder: (context, i) {
-                      final a = provider.articles[i];
-                      return _ArticleInventaireTile(
-                        article: a,
-                        store: store,
-                        onTap: () => _openDetail(context, a),
-                      ).animate().fadeIn(delay: Duration(milliseconds: i * 15));
-                    },
-                  ),
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: provider.articles.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) => _ArticleInventaireTile(article: provider.articles[i], store: store),
+                ),
           ),
         ],
       ),
     );
   }
-
-  void _openReception(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const FactureFormDialog(),
-    );
-  }
-
-  void _openDetail(BuildContext context, ArticleInventaireEntity a) {
-    showDialog(
-      context: context,
-      builder: (_) => ArticleInventaireDetailDialog(article: a),
-    );
-  }
-
-  String _statutLabel(String s) => switch (s) {
-    'tous' => 'Tous',
-    'en_stock' => 'En stock',
-    'affecte' => 'Affecté',
-    'en_maintenance' => 'Maintenance',
-    'reforme' => 'Réformé',
-    _ => s,
-  };
 }
 
 class _InventaireKpiBarre extends StatelessWidget {
   final List<ArticleInventaireEntity> articles;
   final ObjectBoxStore store;
-
   const _InventaireKpiBarre({required this.articles, required this.store});
 
   @override
   Widget build(BuildContext context) {
     final enStock = articles.where((a) => a.statut == 'en_stock').length;
     final affecte = articles.where((a) => a.statut == 'affecte').length;
-    final maintenance = articles
-        .where((a) => a.statut == 'en_maintenance')
-        .length;
-    final valeurTotale = articles.fold<double>(
-      0,
-      (sum, a) => sum + (a.valeurNetteComptable ?? 0),
-    );
+    final valeur = articles.fold<double>(0, (sum, a) => sum + (a.valeurNetteComptable ?? 0));
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: Theme.of(context).colorScheme.surfaceVariant,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _KpiItem(
-            label: 'Total',
-            value: '${articles.length}',
-            icon: Icons.inventory_2_outlined,
-          ),
-          _KpiItem(
-            label: 'En stock',
-            value: '$enStock',
-            icon: Icons.warehouse_outlined,
-            color: Colors.blue,
-          ),
-          _KpiItem(
-            label: 'Affectés',
-            value: '$affecte',
-            icon: Icons.assignment_outlined,
-            color: Colors.green,
-          ),
-          _KpiItem(
-            label: 'Maintenance',
-            value: '$maintenance',
-            icon: Icons.build_outlined,
-            color: Colors.orange,
-          ),
-          _KpiItem(
-            label: 'Valeur nette',
-            value: '${(valeurTotale / 1000).toStringAsFixed(0)} K DA',
-            icon: Icons.account_balance_outlined,
-            color: Colors.purple,
-          ),
+          _KpiItem(label: 'TOTAL', value: '${articles.length}', icon: Icons.inventory),
+          _KpiItem(label: 'STOCK', value: '$enStock', icon: Icons.warehouse, color: Colors.blue),
+          _KpiItem(label: 'AFFECTÉS', value: '$affecte', icon: Icons.person, color: Colors.green),
+          _KpiItem(label: 'VALEUR', value: '${(valeur/1000).toStringAsFixed(1)}K', icon: Icons.euro, color: Colors.purple),
         ],
       ),
     );
@@ -627,34 +434,17 @@ class _InventaireKpiBarre extends StatelessWidget {
 }
 
 class _KpiItem extends StatelessWidget {
-  final String label;
-  final String value;
+  final String label, value;
   final IconData icon;
   final Color? color;
-
-  const _KpiItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color,
-  });
-
+  const _KpiItem({required this.label, required this.value, required this.icon, this.color});
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color, size: 20),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 16,
-          ),
-        ),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color)),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
     );
   }
@@ -663,107 +453,28 @@ class _KpiItem extends StatelessWidget {
 class _ArticleInventaireTile extends StatelessWidget {
   final ArticleInventaireEntity article;
   final ObjectBoxStore store;
-  final VoidCallback onTap;
-
-  const _ArticleInventaireTile({
-    required this.article,
-    required this.store,
-    required this.onTap,
-  });
+  const _ArticleInventaireTile({required this.article, required this.store});
 
   @override
   Widget build(BuildContext context) {
     final a = article;
-    final articleRef = store.articles
-        .query(ArticleEntity_.uuid.equals(a.articleUuid))
-        .build()
-        .findFirst();
-    final service = a.serviceUuid != null
-        ? store.services
-              .query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!))
-              .build()
-              .findFirst()
-        : null;
-
-    final isMaintenance =
-        a.dateProchaineMaintenace != null &&
-        a.dateProchaineMaintenace!.isBefore(
-          DateTime.now().add(const Duration(days: 30)),
-        );
+    final art = store.articles.query(ArticleEntity_.uuid.equals(a.articleUuid)).build().findFirst();
+    final srv = a.serviceUuid != null ? store.services.query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!)).build().findFirst() : null;
 
     return Card(
       child: ListTile(
-        dense: true,
-        leading: _StatutAvatar(statut: a.statut),
-        title: Row(
-          children: [
-            Text(
-              a.numeroInventaire,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (isMaintenance)
-              const Icon(Icons.warning_amber, color: Colors.orange, size: 14),
-          ],
-        ),
-        subtitle: Text(
-          [
-            articleRef?.designation ?? a.articleUuid,
-            if (service != null) service.libelle,
-            if (a.numeroSerieOrigine != null) 'SN: ${a.numeroSerieOrigine}',
-          ].join('  •  '),
-          style: const TextStyle(fontSize: 11),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(a.etatPhysique, style: const TextStyle(fontSize: 11)),
-            if (a.valeurNetteComptable != null)
-              Text(
-                '${a.valeurNetteComptable!.toStringAsFixed(0)} DA',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-          ],
-        ),
-        onTap: onTap,
+        leading: _StatutBadge(statut: a.statut),
+        title: Text(a.numeroInventaire, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        subtitle: Text('${art?.designation ?? "Article inconnu"} • ${srv?.libelle ?? "EN STOCK"}'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showDialog(context: context, builder: (_) => ArticleInventaireDetailDialog(article: a)),
       ),
     );
   }
 }
 
-class _StatutAvatar extends StatelessWidget {
-  final String statut;
-  const _StatutAvatar({required this.statut});
-
-  @override
-  Widget build(BuildContext context) {
-    final (color, icon) = switch (statut) {
-      'en_stock' => (Colors.blue, Icons.warehouse_outlined),
-      'affecte' => (Colors.green, Icons.assignment_outlined),
-      'en_maintenance' => (Colors.orange, Icons.build_outlined),
-      'reforme' => (Colors.grey, Icons.archive_outlined),
-      'perdu_vole' => (Colors.red, Icons.report_outlined),
-      _ => (Colors.grey, Icons.help_outline),
-    };
-
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: color.withOpacity(0.15),
-      child: Icon(icon, size: 16, color: color),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// DIALOG DÉTAIL ARTICLE + QR CODE
+// DIALOG DÉTAIL EXPERT
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ArticleInventaireDetailDialog extends StatelessWidget {
@@ -772,197 +483,202 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final a = article;
+    final theme = Theme.of(context);
     final store = ObjectBoxStore.instance;
-    final articleRef = store.articles
-        .query(ArticleEntity_.uuid.equals(a.articleUuid))
-        .build()
-        .findFirst();
-    final service = a.serviceUuid != null
-        ? store.services
-              .query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!))
-              .build()
-              .findFirst()
-        : null;
-    final fmt = DateFormat('dd/MM/yyyy');
+    final art = store.articles.query(ArticleEntity_.uuid.equals(article.articleUuid)).build().findFirst();
+    final mvts = store.historique.query(HistoriqueMouvementEntity_.articleInventaireUuid.equals(article.uuid)).order(HistoriqueMouvementEntity_.createdAt, flags: Order.descending).build().find();
 
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 600),
-        child: Column(
-          children: [
-            // En-tête
-            Container(
-              padding: const EdgeInsets.all(20),
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: Row(
-                children: [
-                  const Icon(Icons.inventory_2),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          a.numeroInventaire,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        Text(articleRef?.designation ?? '—', overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  _StatutBadge(statut: a.statut),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Infos ──
-                  Expanded(
-                    flex: 3,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
+    return DefaultTabController(
+      length: 3,
+      child: Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                color: theme.colorScheme.primaryContainer,
+                child: Row(
+                  children: [
+                    const Icon(Icons.qr_code_2, size: 32),
+                    const SizedBox(width: 16),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _InfoRow('N° Inventaire', a.numeroInventaire),
-                          _InfoRow('Article', articleRef?.designation ?? '—'),
-                          _InfoRow(
-                            'N° Série origine',
-                            a.numeroSerieOrigine ?? 'Non sérialisé',
-                          ),
-                          _InfoRow('Statut', a.statut),
-                          _InfoRow('État physique', a.etatPhysique),
-                          _InfoRow('Service', service?.libelle ?? 'En stock'),
-                          _InfoRow(
-                            'Localisation',
-                            a.localisationPrecise ?? '—',
-                          ),
-                          if (a.valeurAcquisition != null)
-                            _InfoRow(
-                              'Valeur acquisition',
-                              '${a.valeurAcquisition!.toStringAsFixed(2)} DA',
-                            ),
-                          if (a.valeurNetteComptable != null)
-                            _InfoRow(
-                              'Valeur nette comptable',
-                              '${a.valeurNetteComptable!.toStringAsFixed(2)} DA',
-                            ),
-                          if (a.dateMiseService != null)
-                            _InfoRow(
-                              'Mise en service',
-                              fmt.format(a.dateMiseService!),
-                            ),
-                          if (a.dateProchaineMaintenace != null)
-                            _InfoRow(
-                              'Prochaine maintenance',
-                              fmt.format(a.dateProchaineMaintenace!),
-                              warning: a.dateProchaineMaintenace!.isBefore(
-                                DateTime.now().add(const Duration(days: 30)),
-                              ),
-                            ),
-                          if (a.observations != null)
-                            _InfoRow('Observations', a.observations!),
+                          Text(article.numeroInventaire, style: theme.textTheme.headlineSmall?.copyWith(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                          Text(art?.designation ?? 'Article inconnu', style: theme.textTheme.bodyMedium),
                         ],
                       ),
                     ),
-                  ),
-
-                  const VerticalDivider(width: 1),
-
-                  // ── QR Code ──
-                  SizedBox(
-                    width: 200,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        QrImageView(
-                          data: a.qrCodeInterne,
-                          version: QrVersions.auto,
-                          size: 160,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          a.qrCodeInterne,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 10,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.print, size: 16),
-                          label: const Text('Imprimer étiquette'),
-                          onPressed: () => _imprimerEtiquette(context, a),
-                        ),
-                      ],
-                    ),
-                  ),
+                    _StatutBadge(statut: article.statut),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                  ],
+                ),
+              ),
+              const TabBar(
+                tabs: [
+                  Tab(icon: Icon(Icons.info_outline), text: 'Détails'),
+                  Tab(icon: Icon(Icons.history), text: 'Historique'),
+                  Tab(icon: Icon(Icons.settings_suggest), text: 'Actions'),
                 ],
               ),
-            ),
-          ],
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildInfoTab(context, article, art),
+                    _buildHistoryTab(mvts, store),
+                    _buildActionsTab(context, article, store),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _imprimerEtiquette(
-    BuildContext context,
-    ArticleInventaireEntity a,
-  ) async {
-    // Impression PDF de l'étiquette QR — intégration Sprint 5
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Impression étiquette ${a.numeroInventaire}...'),
-        action: SnackBarAction(label: 'OK', onPressed: () {}),
+  Widget _buildInfoTab(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art) {
+    final fmt = DateFormat('dd/MM/yyyy');
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Column(
+              children: [
+                _InfoRow('Identifiant Unique', a.uuid),
+                _InfoRow('Numéro Série', a.numeroSerieOrigine ?? 'N/A'),
+                _InfoRow('État Physique', a.etatPhysique.toUpperCase()),
+                _InfoRow('Mise en service', a.dateMiseService != null ? fmt.format(a.dateMiseService!) : '—'),
+                _InfoRow('Valeur d\'achat', '${a.valeurAcquisition?.toStringAsFixed(2) ?? "0"} DA'),
+                _InfoRow('VNC', '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA'),
+                _InfoRow('Localisation', a.localisationPrecise ?? 'Non définie'),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              children: [
+                QrImageView(data: a.qrCodeInterne, size: 180),
+                const SizedBox(height: 8),
+                const Text('CODE QR INTERNE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 16),
+                FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.print), label: const Text('Étiquette')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryTab(List<HistoriqueMouvementEntity> mvts, ObjectBoxStore store) {
+    if (mvts.isEmpty) return const Center(child: Text('Aucun historique pour cet article'));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: mvts.length,
+      itemBuilder: (context, i) {
+        final m = mvts[i];
+        return ListTile(
+          dense: true,
+          leading: Icon(_mvtIcon(m.typeMouvement), color: Colors.blue),
+          title: Text(m.typeMouvement.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(m.createdAt)),
+          trailing: Text(m.statutApres ?? ''),
+        );
+      },
+    );
+  }
+
+  Widget _buildActionsTab(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        _ActionBtn(label: 'Affecter à un service', icon: Icons.person_add, color: Colors.green, onTap: () => _showTransferDialog(context, a, store)),
+        _ActionBtn(label: 'Envoyer en Maintenance', icon: Icons.build, color: Colors.orange, onTap: () => _quickStatus(context, a, 'en_maintenance')),
+        _ActionBtn(label: 'Déclarer Perdu/Volé', icon: Icons.report_problem, color: Colors.red, onTap: () => _quickStatus(context, a, 'perdu_vole')),
+        _ActionBtn(label: 'Réformer (Archiver)', icon: Icons.archive, color: Colors.grey, onTap: () => _quickStatus(context, a, 'reforme')),
+      ],
+    );
+  }
+
+  void _quickStatus(BuildContext context, ArticleInventaireEntity a, String status) {
+    final user = context.read<AuthProvider>().currentUser;
+    context.read<InventaireProvider>().updateStatut(a, status, user?.uuid ?? '');
+    Navigator.pop(context);
+  }
+
+  void _showTransferDialog(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
+    final services = store.services.getAll();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Transférer l\'article'),
+        content: SizedBox(
+          width: 300,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: services.length,
+            itemBuilder: (c, i) => ListTile(
+              title: Text(services[i].libelle),
+              onTap: () {
+                final user = context.read<AuthProvider>().currentUser;
+                context.read<InventaireProvider>().updateStatut(a, 'affecte', user?.uuid ?? '', serviceUuid: services[i].uuid);
+                Navigator.pop(ctx);
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _mvtIcon(String type) => switch(type) {
+    'entree' => Icons.login,
+    'affectation' => Icons.person_add,
+    'transfert' => Icons.swap_horiz,
+    _ => Icons.history,
+  };
+}
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.label, required this.icon, required this.color, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16), side: BorderSide(color: color), foregroundColor: color),
+        onPressed: onTap,
+        icon: Icon(icon),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
 }
 
 class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool warning;
-
-  const _InfoRow(this.label, this.value, {this.warning = false});
-
+  final String label, value;
+  const _InfoRow(this.label, this.value);
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 160,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                color: warning ? Colors.orange.shade800 : null,
-              ),
-            ),
-          ),
+          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500))),
         ],
       ),
     );
@@ -972,23 +688,20 @@ class _InfoRow extends StatelessWidget {
 class _StatutBadge extends StatelessWidget {
   final String statut;
   const _StatutBadge({required this.statut});
-
   @override
   Widget build(BuildContext context) {
-    final (badgeText, color) = switch (statut) {
-      'en_stock' => ('En stock', Colors.blue),
-      'affecte' => ('Affecté', Colors.green),
-      'en_maintenance' => ('Maintenance', Colors.orange),
-      'reforme' => ('Réformé', Colors.grey),
-      'perdu_vole' => ('Perdu/Volé', Colors.red),
-      _ => (statut, Colors.grey),
+    final (badgeLabel, color) = switch (statut) {
+      'en_stock' => ('EN STOCK', Colors.blue),
+      'affecte' => ('AFFECTÉ', Colors.green),
+      'en_maintenance' => ('MAINTENANCE', Colors.orange),
+      'reforme' => ('RÉFORMÉ', Colors.grey),
+      'perdu_vole' => ('PERDU/VOLÉ', Colors.red),
+      _ => (statut.toUpperCase(), Colors.grey),
     };
-
-    return Chip(
-      label: Text(badgeText, style: const TextStyle(fontSize: 11)),
-      backgroundColor: color.withOpacity(0.15),
-      side: BorderSide(color: color.withOpacity(0.5)),
-      padding: EdgeInsets.zero,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
+      child: Text(badgeLabel, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 }

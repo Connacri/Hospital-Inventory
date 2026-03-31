@@ -1,4 +1,4 @@
-🚀 IA Release 1.0.0+9 (31/03/2026 13:44)
+🚀 IA Release 1.0.0+10 (31/03/2026 16:28)
 
 CHANGELOG :
 - UI : Thème Playfair Display expert, contrastes et tailles augmentées.
