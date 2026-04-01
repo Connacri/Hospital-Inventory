@@ -781,6 +781,145 @@ class FournisseurAutocomplete extends StatelessWidget {
   }
 }
 
+// ── Widget Sélection Multiple ──────────────────────────────────────────
+
+class FournisseurMultiSelect extends StatefulWidget {
+  final List<String> initialUuids;
+  final void Function(List<String>) onChanged;
+  final String label;
+
+  const FournisseurMultiSelect({
+    super.key,
+    required this.initialUuids,
+    required this.onChanged,
+    this.label = 'Fournisseurs',
+  });
+
+  @override
+  State<FournisseurMultiSelect> createState() => _FournisseurMultiSelectState();
+}
+
+class _FournisseurMultiSelectState extends State<FournisseurMultiSelect> {
+  late List<String> _selectedUuids;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedUuids = List.from(widget.initialUuids);
+  }
+
+  void _showSelectionDialog() {
+    final repo = FournisseurRepository();
+    final all = repo.getAll();
+
+    showDialog<List<String>>(
+      context: context,
+      builder: (ctx) {
+        List<String> tempSelected = List.from(_selectedUuids);
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Sélectionner des fournisseurs'),
+              content: SizedBox(
+                width: 500,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: all.length,
+                  itemBuilder: (ctx, i) {
+                    final f = all[i];
+                    final isSelected = tempSelected.contains(f.uuid);
+                    return CheckboxListTile(
+                      title: Text(f.raisonSociale),
+                      subtitle: Text(f.code),
+                      value: isSelected,
+                      onChanged: (v) {
+                        setDialogState(() {
+                          if (v == true) {
+                            tempSelected.add(f.uuid);
+                          } else {
+                            tempSelected.remove(f.uuid);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, tempSelected),
+                  child: const Text('Confirmer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((results) {
+      if (results != null) {
+        setState(() => _selectedUuids = results);
+        widget.onChanged(results);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final repo = FournisseurRepository();
+    
+    // Récupérer les entités pour l'affichage des chips
+    final selectedEntities = _selectedUuids
+        .map((uuid) => repo.getByUuid(uuid))
+        .whereType<FournisseurEntity>()
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.business, color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(widget.label, style: theme.textTheme.labelMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _showSelectionDialog,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Gérer'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: selectedEntities.isEmpty
+              ? Text('Aucun fournisseur sélectionné', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline))
+              : Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: selectedEntities.map((f) {
+                    return InputChip(
+                      label: Text(f.raisonSociale),
+                      onDeleted: () {
+                        setState(() => _selectedUuids.remove(f.uuid));
+                        widget.onChanged(_selectedUuids);
+                      },
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── État vide ────────────────────────────────────────────────────────────────
 class _EmptyState extends StatelessWidget {
   final String message;

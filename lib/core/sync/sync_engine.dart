@@ -64,8 +64,9 @@ const _syncTableOrder = [
   'fournisseurs',
   'categories_article',
   'articles',
+  'articles_fournisseurs', // Nouveau
   'services_hopital',
-  'utilisateurs', // Correction: profils_utilisateurs -> utilisateurs
+  'utilisateurs',
   'bons_commande',
   'factures',
   'lignes_facture',
@@ -286,6 +287,7 @@ class SyncWorker {
       'articles_inventaire' => _store.articlesInventaire.getAll().map((e) => e.toSupabaseMap()).toList(),
       'factures' => _store.factures.getAll().map((e) => e.toSupabaseMap()).toList(),
       'lignes_facture' => _store.lignesFacture.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'articles_fournisseurs' => _store.articlesFournisseurs.getAll().map((e) => e.toSupabaseMap()).toList(),
       _ => [],
     };
   }
@@ -324,12 +326,40 @@ class PullMerger {
             _mergeGeneric(box: _store.factures, row: row, query: (uuid) => _store.factures.query(FactureEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _factureFromMap(m));
           case 'lignes_facture':
             _mergeGeneric(box: _store.lignesFacture, row: row, query: (uuid) => _store.lignesFacture.query(LigneFactureEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _ligneFactureFromMap(m));
+          case 'articles_fournisseurs':
+            _mergeArticleFournisseur(row);
           default:
             _log.d('PullMerger: table $table non gérée');
         }
       } catch (e) {
         _log.e('PullMerger.merge error ($table/${row['uuid']}): $e');
       }
+    }
+  }
+
+  static void _mergeArticleFournisseur(Map<String, dynamic> row) {
+    final uuid = row['uuid'] as String;
+    final articleUuid = row['article_uuid'] as String;
+    final fournisseurUuid = row['fournisseur_uuid'] as String;
+    final isDeleted = row['is_deleted'] as bool? ?? false;
+
+    // 1. Update Join Entity
+    final entity = ArticleFournisseurEntity.fromSupabaseMap(row);
+    _store.articlesFournisseurs.put(entity);
+
+    // 2. Sync ToMany relations in ObjectBox
+    final article = _store.articles.query(ArticleEntity_.uuid.equals(articleUuid)).build().findFirst();
+    final fournisseur = _store.fournisseurs.query(FournisseurEntity_.uuid.equals(fournisseurUuid)).build().findFirst();
+
+    if (article != null && fournisseur != null) {
+      if (isDeleted) {
+        fournisseur.articles.removeWhere((a) => a.uuid == articleUuid);
+      } else {
+        if (!fournisseur.articles.any((a) => a.uuid == articleUuid)) {
+          fournisseur.articles.add(article);
+        }
+      }
+      _store.fournisseurs.put(fournisseur);
     }
   }
 

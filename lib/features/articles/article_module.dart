@@ -136,7 +136,7 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
   Future<ArticleEntity> create({
     required String designation,
     required String categorieUuid,
-    String? fournisseurUuid,
+    List<String> fournisseurUuids = const [],
     String? madeIn,
     String? description,
     String uniteMesure = 'unité',
@@ -150,7 +150,6 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       ..designation = designation
       ..description = description
       ..categorieUuid = categorieUuid
-      ..fournisseurUuid = fournisseurUuid
       ..madeIn = madeIn
       ..uniteMesure = uniteMesure
       ..codeGtin = codeGtin
@@ -160,7 +159,20 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       ..stockActuel = 0
       ..actif = true;
 
-    return await insert(entity);
+    // Définir le fournisseur principal (compatibilité)
+    if (fournisseurUuids.isNotEmpty) {
+      entity.fournisseurUuid = fournisseurUuids.first;
+    }
+
+    final saved = await insert(entity);
+
+    // Créer les liens many-to-many
+    final linkRepo = ArticleFournisseurRepository();
+    for (final fUuid in fournisseurUuids) {
+      await linkRepo.link(saved.uuid, fUuid);
+    }
+
+    return saved;
   }
 
   @override
@@ -183,6 +195,100 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
   DateTime getUpdatedAt(ArticleEntity e) => e.updatedAt;
   @override
   Map<String, dynamic> toMap(ArticleEntity e) => e.toSupabaseMap();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPOSITORY JONCTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ArticleFournisseurRepository extends BaseRepository<ArticleFournisseurEntity> {
+  ArticleFournisseurRepository()
+      : super(box: ObjectBoxStore.instance.articlesFournisseurs, tableName: 'articles_fournisseurs');
+
+  @override
+  ArticleFournisseurEntity? getByUuid(String uuid) =>
+      box.query(ArticleFournisseurEntity_.uuid.equals(uuid)).build().findFirst();
+
+  List<ArticleFournisseurEntity> getByArticle(String articleUuid) =>
+      box.query(ArticleFournisseurEntity_.articleUuid.equals(articleUuid).and(ArticleFournisseurEntity_.isDeleted.equals(false))).build().find();
+
+  Future<void> link(String articleUuid, String fournisseurUuid) async {
+    final existing = box
+        .query(ArticleFournisseurEntity_.articleUuid
+            .equals(articleUuid)
+            .and(ArticleFournisseurEntity_.fournisseurUuid.equals(fournisseurUuid)))
+        .build()
+        .findFirst();
+
+    if (existing != null) {
+      if (existing.isDeleted) {
+        existing.isDeleted = false;
+        await update(existing);
+      }
+      return;
+    }
+
+    final entity = ArticleFournisseurEntity()
+      ..uuid = const Uuid().v4()
+      ..articleUuid = articleUuid
+      ..fournisseurUuid = fournisseurUuid;
+
+    await insert(entity);
+
+    // Mettre à jour la relation ToMany ObjectBox pour la navigation locale
+    final store = ObjectBoxStore.instance;
+    final article = store.articles.query(ArticleEntity_.uuid.equals(articleUuid)).build().findFirst();
+    final fournisseur = store.fournisseurs.query(FournisseurEntity_.uuid.equals(fournisseurUuid)).build().findFirst();
+
+    if (article != null && fournisseur != null) {
+      if (!article.fournisseurs.any((f) => f.uuid == fournisseurUuid)) {
+        article.fournisseurs.add(fournisseur);
+        store.articles.put(article);
+      }
+    }
+  }
+
+  Future<void> unlink(String articleUuid, String fournisseurUuid) async {
+    final existing = box
+        .query(ArticleFournisseurEntity_.articleUuid
+            .equals(articleUuid)
+            .and(ArticleFournisseurEntity_.fournisseurUuid.equals(fournisseurUuid)))
+        .build()
+        .findFirst();
+
+    if (existing != null && !existing.isDeleted) {
+      await delete(existing.uuid);
+
+      // Mettre à jour ToMany local
+      final store = ObjectBoxStore.instance;
+      final article = store.articles.query(ArticleEntity_.uuid.equals(articleUuid)).build().findFirst();
+      if (article != null) {
+        article.fournisseurs.removeWhere((f) => f.uuid == fournisseurUuid);
+        store.articles.put(article);
+      }
+    }
+  }
+
+  @override
+  String getUuid(ArticleFournisseurEntity e) => e.uuid;
+  @override
+  void setUuid(ArticleFournisseurEntity e, String v) => e.uuid = v;
+  @override
+  void setCreatedAt(ArticleFournisseurEntity e, DateTime d) => e.createdAt = d;
+  @override
+  void setUpdatedAt(ArticleFournisseurEntity e, DateTime d) => e.updatedAt = d;
+  @override
+  void setSyncStatus(ArticleFournisseurEntity e, String s) => e.syncStatus = s;
+  @override
+  void setDeviceId(ArticleFournisseurEntity e, String id) => e.deviceId = id;
+  @override
+  void markDeleted(ArticleFournisseurEntity e) => e.isDeleted = true;
+  @override
+  String getSyncStatus(ArticleFournisseurEntity e) => e.syncStatus;
+  @override
+  DateTime getUpdatedAt(ArticleFournisseurEntity e) => e.updatedAt;
+  @override
+  Map<String, dynamic> toMap(ArticleFournisseurEntity e) => e.toSupabaseMap();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,7 +318,7 @@ class ArticleProvider extends ChangeNotifier {
   Future<ArticleEntity> create({
     required String designation,
     required String categorieUuid,
-    String? fournisseurUuid,
+    List<String> fournisseurUuids = const [],
     String? madeIn,
     String? description,
     String uniteMesure = 'unité',
@@ -224,7 +330,7 @@ class ArticleProvider extends ChangeNotifier {
     final a = await _repo.create(
       designation: designation,
       categorieUuid: categorieUuid,
-      fournisseurUuid: fournisseurUuid,
+      fournisseurUuids: fournisseurUuids,
       madeIn: madeIn,
       description: description,
       uniteMesure: uniteMesure,
@@ -508,7 +614,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   late TextEditingController _quantiteInitiale;
   
   String? _categorieUuid;
-  String? _fournisseurUuid;
+  List<String> _fournisseurUuids = [];
   bool _estSerialise = true; // CHANGEMENT: Actif par défaut
   bool _isSaving = false;
 
@@ -529,7 +635,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     _quantiteInitiale = TextEditingController(text: '0');
     
     _categorieUuid = e?.categorieUuid;
-    _fournisseurUuid = e?.fournisseurUuid;
+    _fournisseurUuids = e?.fournisseurs.map((f) => f.uuid).toList() ?? [];
     
     // Si c'est un edit, on garde la valeur de l'objet, sinon c'est true par défaut
     if (e != null) {
@@ -576,179 +682,265 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     final isEdit = widget.existing != null;
     final q = int.tryParse(_quantiteInitiale.text) ?? 0;
 
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 900),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              color: theme.colorScheme.primaryContainer,
-              child: Row(
-                children: [
-                  Icon(isEdit ? Icons.edit_note : Icons.add_business),
-                  const SizedBox(width: 12),
-                  Text(isEdit ? 'Modifier Article' : 'Nouvel Article', style: theme.textTheme.titleLarge),
-                  const Spacer(),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Form(
-                key: _formKey,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Colonne 1: Infos de base
-                    Expanded(
-                      flex: 3,
-                      child: SingleChildScrollView(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 700;
+        final dialogWidth = isMobile ? constraints.maxWidth * 0.95 : 850.0;
+        final dialogHeight = constraints.maxHeight * 0.9;
+
+        return Dialog(
+          insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 40, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: dialogWidth, maxHeight: dialogHeight),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  color: theme.colorScheme.primaryContainer,
+                  child: Row(
+                    children: [
+                      Icon(isEdit ? Icons.edit_note : Icons.add_business),
+                      const SizedBox(width: 12),
+                      Text(isEdit ? 'Modifier Article' : 'Nouvel Article', style: theme.textTheme.titleLarge),
+                      const Spacer(),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: SingleChildScrollView(
+                      child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Column(
-                          children: _buildFormFields(provider, isEdit),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (isEdit) ...[
+                              _buildSectionTitle(theme, 'Statut & Identification'),
+                              Row(
+                                children: [
+                                  Chip(label: Text('Code: ${widget.existing!.codeArticle}', style: const TextStyle(fontFamily: 'monospace'))),
+                                  const SizedBox(width: 12),
+                                  const Spacer(),
+                                  const Text('Actif'),
+                                  Switch(
+                                    value: widget.existing!.actif,
+                                    onChanged: (v) => setState(() => widget.existing!.actif = v),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                            
+                            _buildSectionTitle(theme, 'Informations Générales'),
+                            TextFormField(
+                              controller: _designation,
+                              decoration: const InputDecoration(labelText: 'Désignation *', prefixIcon: Icon(Icons.label_outline)),
+                              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+                            ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _description,
+                              decoration: const InputDecoration(labelText: 'Description détaillée', prefixIcon: Icon(Icons.description_outlined)),
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: 16),
+                            _buildResponsiveRow(
+                              isMobile,
+                              [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        isExpanded: true,
+                                        value: _categorieUuid,
+                                        decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)),
+                                        items: provider.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle))).toList(),
+                                        validator: (v) => v == null ? 'Requis' : null,
+                                        onChanged: (v) => setState(() => _categorieUuid = v),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                                      onPressed: _openCategorieForm,
+                                      tooltip: 'Nouvelle catégorie',
+                                    ),
+                                  ],
+                                ),
+                                TextFormField(
+                                  controller: _madeIn,
+                                  decoration: const InputDecoration(labelText: 'Origine / Made In', prefixIcon: Icon(Icons.public)),
+                                ),
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            _buildSectionTitle(theme, 'Logistique & Traçabilité'),
+                            _buildResponsiveRow(
+                              isMobile,
+                              [
+                                TextFormField(
+                                  controller: _gtin,
+                                  decoration: const InputDecoration(labelText: 'Code Barre (GTIN/EAN)', prefixIcon: Icon(Icons.qr_code_scanner)),
+                                ),
+                                TextFormField(
+                                  controller: _unite,
+                                  decoration: const InputDecoration(labelText: 'Unité de mesure', hintText: 'ex: boîte, unité, kg'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            SwitchListTile(
+                              title: const Text('Article sérialisé'),
+                              subtitle: const Text('Nécessite un numéro de série unique par unité'),
+                              value: _estSerialise,
+                              onChanged: (v) => setState(() => _estSerialise = v),
+                              secondary: const Icon(Icons.numbers),
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            _buildSectionTitle(theme, 'Fournisseurs Associés'),
+                            FournisseurMultiSelect(
+                              initialUuids: _fournisseurUuids,
+                              onChanged: (uuids) => setState(() => _fournisseurUuids = uuids),
+                            ),
+                            
+                            const SizedBox(height: 32),
+                            _buildSectionTitle(theme, 'Paramètres Financiers & Stock'),
+                            _buildResponsiveRow(
+                              isMobile,
+                              [
+                                TextFormField(
+                                  controller: _prix,
+                                  decoration: const InputDecoration(labelText: 'PUMP (Prix Moyen)', prefixIcon: Icon(Icons.payments_outlined), suffixText: 'DA'),
+                                  keyboardType: TextInputType.number,
+                                ),
+                                TextFormField(
+                                  controller: _stockMin,
+                                  decoration: const InputDecoration(labelText: 'Seuil d\'alerte stock', prefixIcon: Icon(Icons.warning_amber_rounded)),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ],
+                            ),
+
+                            if (!isEdit) ...[
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(theme, 'Initialisation du Stock'),
+                              TextFormField(
+                                controller: _quantiteInitiale,
+                                decoration: const InputDecoration(labelText: 'Quantité initiale à créer', prefixIcon: Icon(Icons.inventory_2_outlined)),
+                                keyboardType: TextInputType.number,
+                                onChanged: (v) => setState(() => _updateSerialControllers()),
+                              ),
+                              if (q > 0) ...[
+                                const SizedBox(height: 16),
+                                _buildSerialSection(theme, q),
+                              ],
+                            ],
+
+                            if (isEdit) ...[
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(theme, 'Affectations Actuelles'),
+                              _buildAffectationsList(theme),
+                            ],
+                          ],
                         ),
                       ),
                     ),
-                    const VerticalDivider(width: 1),
-                    // Colonne 2: Stock Initial / Séries (seulement à la création)
-                    if (!isEdit && q > 0)
-                      Expanded(
-                        flex: 2,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(24),
-                          child: _buildSerialSection(theme, q),
-                        ),
+                  ),
+                ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: _isSaving ? null : _save,
+                        icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
+                        label: Text(isEdit ? 'Enregistrer les modifications' : 'Créer l\'article'),
                       ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: _isSaving ? null : _save,
-                    icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
-                    label: Text(isEdit ? 'Mettre à jour' : 'Enregistrer l\'article'),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildFormFields(ArticleProvider provider, bool isEdit) {
-    final store = ObjectBoxStore.instance;
-    FournisseurEntity? initialFournisseur;
-    
-    // CORRECTION CRITIQUE: Forcer la recherche du fournisseur si l'UUID est présent
-    if (_fournisseurUuid != null && _fournisseurUuid!.isNotEmpty) {
-      initialFournisseur = store.fournisseurs
-          .query(FournisseurEntity_.uuid.equals(_fournisseurUuid!))
-          .build()
-          .findFirst();
-    }
-
-    return [
-      TextFormField(
-        controller: _designation,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Désignation *'),
-        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
-      ),
-      const SizedBox(height: 16),
-      Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    value: _categorieUuid,
-                    decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)),
-                    items: provider.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle))).toList(),
-                    validator: (v) => v == null ? 'Requis' : null,
-                    onChanged: (v) => setState(() => _categorieUuid = v),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
-                  onPressed: _openCategorieForm,
-                  tooltip: 'Nouvelle catégorie',
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: TextFormField(
-              controller: _madeIn,
-              decoration: const InputDecoration(labelText: 'Origine', prefixIcon: Icon(Icons.public)),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 16),
-      FournisseurAutocomplete(
-        key: ValueKey('fournisseur_$_fournisseurUuid'), // Forcer le rebuild si l'UUID change
-        initialValue: initialFournisseur,
-        onSelected: (f) => setState(() => _fournisseurUuid = f.uuid),
-      ),
-      const SizedBox(height: 16),
-      Row(
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionTitle(ThemeData theme, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextFormField(
-              controller: _prix,
-              decoration: const InputDecoration(labelText: 'Prix d\'achat', prefixIcon: Icon(Icons.payments_outlined), suffixText: 'DA'),
-              keyboardType: TextInputType.number,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: TextFormField(
-              controller: _unite,
-              decoration: const InputDecoration(labelText: 'Unité'),
-            ),
-          ),
+          Text(title.toUpperCase(), style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+          const Divider(),
         ],
       ),
-      const SizedBox(height: 16),
-      TextFormField(
-        controller: _gtin,
-        decoration: const InputDecoration(labelText: 'Code GTIN / EAN (Barcode)', prefixIcon: Icon(Icons.qr_code_scanner)),
+    );
+  }
+
+  Widget _buildResponsiveRow(bool isMobile, List<Widget> children) {
+    if (isMobile) {
+      return Column(
+        children: children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 16), child: c)).toList(),
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children.map((c) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: c))).toList(),
+    );
+  }
+
+  Widget _buildAffectationsList(ThemeData theme) {
+    final store = ObjectBoxStore.instance;
+    final invItems = store.articlesInventaire.query(ArticleInventaireEntity_.articleUuid.equals(widget.existing!.uuid)).build().find();
+    
+    if (invItems.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text('Aucune unité physique en inventaire pour cet article.'),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: theme.dividerColor), borderRadius: BorderRadius.circular(8)),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: invItems.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (ctx, i) {
+          final item = invItems[i];
+          final service = item.serviceUuid != null 
+            ? store.services.query(ServiceHopitalEntity_.uuid.equals(item.serviceUuid!)).build().findFirst()
+            : null;
+
+          return ListTile(
+            leading: Icon(Icons.qr_code, color: theme.colorScheme.secondary),
+            title: Text(item.numeroInventaire, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(item.statut == 'affecte' ? 'Affecté à: ${service?.libelle ?? "Inconnu"}' : 'Statut: ${item.statut}'),
+            trailing: IconButton(
+              icon: const Icon(Icons.assignment_ind_outlined),
+              onPressed: () => _manageAffectation(item),
+              tooltip: 'Gérer l\'affectation',
+            ),
+          );
+        },
       ),
-      const SizedBox(height: 16),
-      SwitchListTile(
-        title: const Text('Article sérialisé'),
-        subtitle: const Text('Numéro de série unique par unité'),
-        value: _estSerialise,
-        onChanged: (v) => setState(() => _estSerialise = v),
-      ),
-      if (!isEdit) ...[
-        const Divider(height: 32),
-        TextFormField(
-          controller: _quantiteInitiale,
-          decoration: const InputDecoration(labelText: 'Stock initial à créer', prefixIcon: Icon(Icons.add_shopping_cart)),
-          keyboardType: TextInputType.number,
-          onChanged: (v) {
-            setState(() {
-              _updateSerialControllers();
-            });
-          },
-        ),
-      ],
-    ];
+    );
+  }
+
+  void _manageAffectation(ArticleInventaireEntity item) {
+    // Note: Logique à implémenter pour ouvrir le dialogue d'affectation
+    AppToast.show(context, 'Gérer affectation pour ${item.numeroInventaire}');
   }
 
   void _openCategorieForm() async {
@@ -816,7 +1008,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         final a = await provider.create(
           designation: _designation.text.trim(),
           categorieUuid: _categorieUuid!,
-          fournisseurUuid: _fournisseurUuid,
+          fournisseurUuids: _fournisseurUuids,
           madeIn: _madeIn.text.trim(),
           prixUnitaireMoyen: double.tryParse(_prix.text) ?? 0,
           description: _description.text.trim().isNotEmpty ? _description.text.trim() : null,
@@ -843,7 +1035,6 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         a
           ..designation = _designation.text.trim()
           ..categorieUuid = _categorieUuid
-          ..fournisseurUuid = _fournisseurUuid
           ..madeIn = _madeIn.text.trim()
           ..prixUnitaireMoyen = double.tryParse(_prix.text) ?? 0
           ..description = _description.text.trim().isNotEmpty ? _description.text.trim() : null
@@ -851,7 +1042,32 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
           ..codeGtin = _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null
           ..stockMinimum = int.tryParse(_stockMin.text) ?? 0
           ..estSerialise = _estSerialise;
+
+        // Mise à jour fournisseur principal (compatibilité)
+        if (_fournisseurUuids.isNotEmpty) {
+          a.fournisseurUuid = _fournisseurUuids.first;
+        }
+
         await provider.update(a);
+
+        // Mise à jour des liens many-to-many
+        final linkRepo = ArticleFournisseurRepository();
+        final currentLinks = linkRepo.getByArticle(a.uuid);
+        final currentUuids = currentLinks.map((l) => l.fournisseurUuid).toList();
+
+        // 1. Unlink ceux qui ne sont plus là
+        for (final l in currentLinks) {
+          if (!_fournisseurUuids.contains(l.fournisseurUuid)) {
+            await linkRepo.unlink(a.uuid, l.fournisseurUuid);
+          }
+        }
+
+        // 2. Link les nouveaux
+        for (final fUuid in _fournisseurUuids) {
+          if (!currentUuids.contains(fUuid)) {
+            await linkRepo.link(a.uuid, fUuid);
+          }
+        }
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -899,6 +1115,8 @@ class ArticleDetailDialog extends StatelessWidget {
                   _InfoRow('PUMP', '${a.prixUnitaireMoyen.toStringAsFixed(0)} DA'),
                   _InfoRow('Made in', a.madeIn ?? '—'),
                   _InfoRow('EAN/GTIN', a.codeGtin ?? '—'),
+                  if (a.fournisseurs.isNotEmpty)
+                    _InfoRow('Fournisseurs', a.fournisseurs.map((f) => f.raisonSociale).join(', ')),
                   const Divider(),
                   const SizedBox(height: 8),
                   Text(a.description ?? 'Pas de description.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),

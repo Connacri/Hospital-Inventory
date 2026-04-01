@@ -41,6 +41,7 @@ class ObjectBoxStore {
   late final Box<LigneDotationEntity> lignesDotation;
   late final Box<AffectationEntity> affectations;
   late final Box<HistoriqueMouvementEntity> historique;
+  late final Box<ArticleFournisseurEntity> articlesFournisseurs;
 
   ObjectBoxStore._();
 
@@ -72,15 +73,6 @@ class ObjectBoxStore {
     supabaseConfigs = _store.box<SupabaseConfigEntity>();
     appSettings = _store.box<AppSettingsEntity>();
     
-    // DEBUG SETTINGS
-    final allSettings = appSettings.getAll();
-    if (allSettings.isEmpty) {
-      print('OBX_DEBUG: appSettings is EMPTY at startup');
-    } else {
-      print('OBX_DEBUG: appSettings count: ${allSettings.length}');
-      print('OBX_DEBUG: appSettings[0] user: ${allSettings.first.loggedInUserUuid}');
-    }
-
     syncQueue = _store.box<SyncQueueEntity>();
     conflicts = _store.box<ConflictEntity>();
     utilisateurs = _store.box<UtilisateurEntity>();
@@ -98,6 +90,7 @@ class ObjectBoxStore {
     lignesDotation = _store.box<LigneDotationEntity>();
     affectations = _store.box<AffectationEntity>();
     historique = _store.box<HistoriqueMouvementEntity>();
+    articlesFournisseurs = _store.box<ArticleFournisseurEntity>();
 
     // Initialiser les séquences si première installation
     await _initSequences();
@@ -148,14 +141,51 @@ class ObjectBoxStore {
     final fBureauPro = _ensureFournisseur('F-BPRO', 'Bureau Pro Algérie', adresse: 'Dar El Beida, Alger', tel: '023 80 00 00');
 
     // 4. Articles Médicaux et Bureautique
-    _ensureArticle('ART-0001', 'Stéthoscope Littmann Classic III', catEquip.uuid, fBiopharm.uuid, prix: 18500);
-    _ensureArticle('ART-0002', 'Tensiomètre Bras OMRON M3', catEquip.uuid, fBiopharm.uuid, prix: 12500);
-    _ensureArticle('ART-0003', 'Gants en Latex (Boite de 100)', catMed.uuid, fSaidal.uuid, prix: 1200, unite: 'boite');
-    _ensureArticle('ART-0004', 'Seringues 5ml (Boite de 100)', catMed.uuid, fFrater.uuid, prix: 1500, unite: 'boite');
-    _ensureArticle('ART-0005', 'Laptop Dell Latitude 5420 i7/16Go', catInf.uuid, fBureauPro.uuid, prix: 145000);
-    _ensureArticle('ART-0006', 'Ramette Papier A4 80g Double A', catBur.uuid, fBureauPro.uuid, prix: 1100, unite: 'ramette');
-    _ensureArticle('ART-0007', 'Bureau Direction Bois Massif', catBur.uuid, fBureauPro.uuid, prix: 85000);
-    _ensureArticle('ART-0008', 'Chaise Ergonomique Grand Confort', catBur.uuid, fBureauPro.uuid, prix: 32000);
+    final artStetho = _ensureArticle('ART-0001', 'Stéthoscope Littmann Classic III', catEquip.uuid, fBiopharm.uuid, prix: 18500);
+    final artTensio = _ensureArticle('ART-0002', 'Tensiomètre Bras OMRON M3', catEquip.uuid, fBiopharm.uuid, prix: 12500);
+    final artGants = _ensureArticle('ART-0003', 'Gants en Latex (Boite de 100)', catMed.uuid, fSaidal.uuid, prix: 1200, unite: 'boite');
+    final artSerin = _ensureArticle('ART-0004', 'Seringues 5ml (Boite de 100)', catMed.uuid, fFrater.uuid, prix: 1500, unite: 'boite');
+    final artLaptop = _ensureArticle('ART-0005', 'Laptop Dell Latitude 5420 i7/16Go', catInf.uuid, fBureauPro.uuid, prix: 145000);
+    final artPapier = _ensureArticle('ART-0006', 'Ramette Papier A4 80g Double A', catBur.uuid, fBureauPro.uuid, prix: 1100, unite: 'ramette');
+    final artBureau = _ensureArticle('ART-0007', 'Bureau Direction Bois Massif', catBur.uuid, fBureauPro.uuid, prix: 85000);
+    final artChaise = _ensureArticle('ART-0008', 'Chaise Ergonomique Grand Confort', catBur.uuid, fBureauPro.uuid, prix: 32000);
+
+    // 5. Liens Articles-Fournisseurs (Plusieurs fournisseurs par article)
+    _linkArticleFournisseur(artStetho, fBiopharm);
+    _linkArticleFournisseur(artStetho, fSaidal); // Stéthoscope dispo chez Saidal aussi
+    _linkArticleFournisseur(artTensio, fBiopharm);
+    _linkArticleFournisseur(artGants, fSaidal);
+    _linkArticleFournisseur(artGants, fFrater); // Gants dispo chez Frater aussi
+    _linkArticleFournisseur(artSerin, fFrater);
+    _linkArticleFournisseur(artLaptop, fBureauPro);
+    _linkArticleFournisseur(artPapier, fBureauPro);
+    _linkArticleFournisseur(artBureau, fBureauPro);
+    _linkArticleFournisseur(artChaise, fBureauPro);
+  }
+
+  void _linkArticleFournisseur(ArticleEntity art, FournisseurEntity four) {
+    // 1. Mise à jour de la relation ToMany ObjectBox (pour usage local)
+    if (!art.fournisseurs.any((f) => f.uuid == four.uuid)) {
+      art.fournisseurs.add(four);
+      articles.put(art);
+    }
+
+    // 2. Création de l'entité de jonction pour la synchronisation Supabase
+    final existing = articlesFournisseurs
+        .query(ArticleFournisseurEntity_.articleUuid.equals(art.uuid)
+            .and(ArticleFournisseurEntity_.fournisseurUuid.equals(four.uuid)))
+        .build()
+        .findFirst();
+
+    if (existing == null) {
+      articlesFournisseurs.put(ArticleFournisseurEntity()
+        ..uuid = const Uuid().v4()
+        ..articleUuid = art.uuid
+        ..fournisseurUuid = four.uuid
+        ..createdAt = DateTime.now()
+        ..updatedAt = DateTime.now()
+        ..syncStatus = 'synced');
+    }
   }
 
   void _ensureUser(String matricule, String password, String nom, String role) {

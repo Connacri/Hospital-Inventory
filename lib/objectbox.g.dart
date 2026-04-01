@@ -102,7 +102,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(2, 1510095067643859351),
       name: 'AppSettingsEntity',
-      lastPropertyId: const obx_int.IdUid(10, 6336422921315993993),
+      lastPropertyId: const obx_int.IdUid(13, 6281273850556997342),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -154,6 +154,21 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(10, 6336422921315993993),
             name: 'updatedAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(11, 5930716591855008769),
+            name: 'isProvisioned',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(12, 3966921100738447545),
+            name: 'provisionedBy',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(13, 6281273850556997342),
+            name: 'loggedInUserUuid',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -161,7 +176,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(3, 7791159834150499618),
       name: 'ArticleEntity',
-      lastPropertyId: const obx_int.IdUid(19, 1964793866467393207),
+      lastPropertyId: const obx_int.IdUid(21, 6583749780938395862),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -260,10 +275,25 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(19, 1964793866467393207),
             name: 'createdAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(20, 9074905534268468080),
+            name: 'fournisseurUuid',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(21, 6583749780938395862),
+            name: 'madeIn',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
-      backlinks: <obx_int.ModelBacklink>[]),
+      backlinks: <obx_int.ModelBacklink>[
+        obx_int.ModelBacklink(
+            name: 'fournisseurs',
+            srcEntity: 'FournisseurEntity',
+            srcField: 'articles')
+      ]),
   obx_int.ModelEntity(
       id: const obx_int.IdUid(4, 6379941622293605336),
       name: 'ArticleInventaireEntity',
@@ -1015,7 +1045,12 @@ final _entities = <obx_int.ModelEntity>[
             type: 10,
             flags: 0)
       ],
-      relations: <obx_int.ModelRelation>[],
+      relations: <obx_int.ModelRelation>[
+        obx_int.ModelRelation(
+            id: const obx_int.IdUid(1, 6504060543988345641),
+            name: 'articles',
+            targetId: const obx_int.IdUid(3, 7791159834150499618))
+      ],
       backlinks: <obx_int.ModelBacklink>[]),
   obx_int.ModelEntity(
       id: const obx_int.IdUid(12, 5218383454154065218),
@@ -1565,7 +1600,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(20, 1923927036595794658),
       name: 'UtilisateurEntity',
-      lastPropertyId: const obx_int.IdUid(15, 5971244686279116080),
+      lastPropertyId: const obx_int.IdUid(17, 8082575472092136961),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1643,6 +1678,73 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(15, 5971244686279116080),
             name: 'createdAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(16, 5585607490328394179),
+            name: 'salt',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(17, 8082575472092136961),
+            name: 'deviceId',
+            type: 9,
+            flags: 0)
+      ],
+      relations: <obx_int.ModelRelation>[],
+      backlinks: <obx_int.ModelBacklink>[]),
+  obx_int.ModelEntity(
+      id: const obx_int.IdUid(21, 6162436709092312604),
+      name: 'ArticleFournisseurEntity',
+      lastPropertyId: const obx_int.IdUid(9, 9215462104140690976),
+      flags: 0,
+      properties: <obx_int.ModelProperty>[
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(1, 8309619908285577806),
+            name: 'id',
+            type: 6,
+            flags: 1),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(2, 389495171329446686),
+            name: 'uuid',
+            type: 9,
+            flags: 2080,
+            indexId: const obx_int.IdUid(34, 1433880399064107846)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(3, 9113982606633696524),
+            name: 'articleUuid',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(35, 3395289434128059491)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(4, 5900443060299113606),
+            name: 'fournisseurUuid',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(36, 6307526598988485376)),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(5, 2494677402253567216),
+            name: 'syncStatus',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(6, 8531805198409101302),
+            name: 'isDeleted',
+            type: 1,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(7, 2978979517480160991),
+            name: 'deviceId',
+            type: 9,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 4514788865324390240),
+            name: 'updatedAt',
+            type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(9, 9215462104140690976),
+            name: 'createdAt',
+            type: 10,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -1684,9 +1786,9 @@ Future<obx.Store> openStore(
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
-      lastEntityId: const obx_int.IdUid(20, 1923927036595794658),
-      lastIndexId: const obx_int.IdUid(33, 421385411343649801),
-      lastRelationId: const obx_int.IdUid(0, 0),
+      lastEntityId: const obx_int.IdUid(21, 6162436709092312604),
+      lastIndexId: const obx_int.IdUid(36, 6307526598988485376),
+      lastRelationId: const obx_int.IdUid(1, 6504060543988345641),
       lastSequenceId: const obx_int.IdUid(0, 0),
       retiredEntityUids: const [],
       retiredIndexUids: const [],
@@ -1789,7 +1891,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
               : fbb.writeString(object.adminPinHash!);
           final deviceIdOffset = fbb.writeString(object.deviceId);
           final deviceTypeOffset = fbb.writeString(object.deviceType);
-          fbb.startTable(11);
+          final provisionedByOffset = object.provisionedBy == null
+              ? null
+              : fbb.writeString(object.provisionedBy!);
+          final loggedInUserUuidOffset = object.loggedInUserUuid == null
+              ? null
+              : fbb.writeString(object.loggedInUserUuid!);
+          fbb.startTable(14);
           fbb.addInt64(0, object.id);
           fbb.addInt64(1, object.activeSupabaseConfigId);
           fbb.addBool(2, object.syncEnabled);
@@ -1800,6 +1908,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(7, deviceIdOffset);
           fbb.addOffset(8, deviceTypeOffset);
           fbb.addInt64(9, object.updatedAt.millisecondsSinceEpoch);
+          fbb.addBool(10, object.isProvisioned);
+          fbb.addOffset(11, provisionedByOffset);
+          fbb.addOffset(12, loggedInUserUuidOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1826,14 +1937,23 @@ obx_int.ModelDefinition getObjectBoxModel() {
             ..deviceType = const fb.StringReader(asciiOptimization: true)
                 .vTableGet(buffer, rootOffset, 20, '')
             ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
-                const fb.Int64Reader().vTableGet(buffer, rootOffset, 22, 0));
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 22, 0))
+            ..isProvisioned =
+                const fb.BoolReader().vTableGet(buffer, rootOffset, 24, false)
+            ..provisionedBy = const fb.StringReader(asciiOptimization: true)
+                .vTableGetNullable(buffer, rootOffset, 26)
+            ..loggedInUserUuid = const fb.StringReader(asciiOptimization: true)
+                .vTableGetNullable(buffer, rootOffset, 28);
 
           return object;
         }),
     ArticleEntity: obx_int.EntityDefinition<ArticleEntity>(
         model: _entities[2],
         toOneRelations: (ArticleEntity object) => [],
-        toManyRelations: (ArticleEntity object) => {},
+        toManyRelations: (ArticleEntity object) => {
+              obx_int.RelInfo<FournisseurEntity>.toManyBacklink(1, object.id):
+                  object.fournisseurs
+            },
         getId: (ArticleEntity object) => object.id,
         setId: (ArticleEntity object, int id) {
           object.id = id;
@@ -1857,7 +1977,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
               : fbb.writeString(object.codeUnspsc!);
           final syncStatusOffset = fbb.writeString(object.syncStatus);
           final deviceIdOffset = fbb.writeString(object.deviceId);
-          fbb.startTable(20);
+          final fournisseurUuidOffset = object.fournisseurUuid == null
+              ? null
+              : fbb.writeString(object.fournisseurUuid!);
+          final madeInOffset =
+              object.madeIn == null ? null : fbb.writeString(object.madeIn!);
+          fbb.startTable(22);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, uuidOffset);
           fbb.addOffset(2, codeArticleOffset);
@@ -1877,6 +2002,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(16, deviceIdOffset);
           fbb.addInt64(17, object.updatedAt.millisecondsSinceEpoch);
           fbb.addInt64(18, object.createdAt.millisecondsSinceEpoch);
+          fbb.addOffset(19, fournisseurUuidOffset);
+          fbb.addOffset(20, madeInOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -1921,8 +2048,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
             ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
                 const fb.Int64Reader().vTableGet(buffer, rootOffset, 38, 0))
             ..createdAt = DateTime.fromMillisecondsSinceEpoch(
-                const fb.Int64Reader().vTableGet(buffer, rootOffset, 40, 0));
-
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 40, 0))
+            ..fournisseurUuid = const fb.StringReader(asciiOptimization: true)
+                .vTableGetNullable(buffer, rootOffset, 42)
+            ..madeIn = const fb.StringReader(asciiOptimization: true)
+                .vTableGetNullable(buffer, rootOffset, 44);
+          obx_int.InternalToManyAccess.setRelInfo<ArticleEntity>(
+              object.fournisseurs,
+              store,
+              obx_int.RelInfo<FournisseurEntity>.toManyBacklink(1, object.id));
           return object;
         }),
     ArticleInventaireEntity: obx_int.EntityDefinition<ArticleInventaireEntity>(
@@ -2538,7 +2672,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
     FournisseurEntity: obx_int.EntityDefinition<FournisseurEntity>(
         model: _entities[10],
         toOneRelations: (FournisseurEntity object) => [],
-        toManyRelations: (FournisseurEntity object) => {},
+        toManyRelations: (FournisseurEntity object) => {
+              obx_int.RelInfo<FournisseurEntity>.toMany(1, object.id):
+                  object.articles
+            },
         getId: (FournisseurEntity object) => object.id,
         setId: (FournisseurEntity object, int id) {
           object.id = id;
@@ -2627,7 +2764,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
                 const fb.Int64Reader().vTableGet(buffer, rootOffset, 36, 0))
             ..createdAt = DateTime.fromMillisecondsSinceEpoch(
                 const fb.Int64Reader().vTableGet(buffer, rootOffset, 38, 0));
-
+          obx_int.InternalToManyAccess.setRelInfo<FournisseurEntity>(
+              object.articles,
+              store,
+              obx_int.RelInfo<FournisseurEntity>.toMany(1, object.id));
           return object;
         }),
     HistoriqueMouvementEntity: obx_int.EntityDefinition<
@@ -3170,7 +3310,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ? null
               : fbb.writeString(object.passwordHash!);
           final syncStatusOffset = fbb.writeString(object.syncStatus);
-          fbb.startTable(16);
+          final saltOffset =
+              object.salt == null ? null : fbb.writeString(object.salt!);
+          final deviceIdOffset = fbb.writeString(object.deviceId);
+          fbb.startTable(18);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, uuidOffset);
           fbb.addOffset(2, supabaseUserIdOffset);
@@ -3186,6 +3329,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addBool(12, object.isDeleted);
           fbb.addInt64(13, object.updatedAt.millisecondsSinceEpoch);
           fbb.addInt64(14, object.createdAt.millisecondsSinceEpoch);
+          fbb.addOffset(15, saltOffset);
+          fbb.addOffset(16, deviceIdOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -3224,7 +3369,64 @@ obx_int.ModelDefinition getObjectBoxModel() {
             ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
                 const fb.Int64Reader().vTableGet(buffer, rootOffset, 30, 0))
             ..createdAt = DateTime.fromMillisecondsSinceEpoch(
-                const fb.Int64Reader().vTableGet(buffer, rootOffset, 32, 0));
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 32, 0))
+            ..salt = const fb.StringReader(asciiOptimization: true)
+                .vTableGetNullable(buffer, rootOffset, 34)
+            ..deviceId = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 36, '');
+
+          return object;
+        }),
+    ArticleFournisseurEntity: obx_int.EntityDefinition<
+            ArticleFournisseurEntity>(
+        model: _entities[20],
+        toOneRelations: (ArticleFournisseurEntity object) => [],
+        toManyRelations: (ArticleFournisseurEntity object) => {},
+        getId: (ArticleFournisseurEntity object) => object.id,
+        setId: (ArticleFournisseurEntity object, int id) {
+          object.id = id;
+        },
+        objectToFB: (ArticleFournisseurEntity object, fb.Builder fbb) {
+          final uuidOffset = fbb.writeString(object.uuid);
+          final articleUuidOffset = fbb.writeString(object.articleUuid);
+          final fournisseurUuidOffset = fbb.writeString(object.fournisseurUuid);
+          final syncStatusOffset = fbb.writeString(object.syncStatus);
+          final deviceIdOffset = fbb.writeString(object.deviceId);
+          fbb.startTable(10);
+          fbb.addInt64(0, object.id);
+          fbb.addOffset(1, uuidOffset);
+          fbb.addOffset(2, articleUuidOffset);
+          fbb.addOffset(3, fournisseurUuidOffset);
+          fbb.addOffset(4, syncStatusOffset);
+          fbb.addBool(5, object.isDeleted);
+          fbb.addOffset(6, deviceIdOffset);
+          fbb.addInt64(7, object.updatedAt.millisecondsSinceEpoch);
+          fbb.addInt64(8, object.createdAt.millisecondsSinceEpoch);
+          fbb.finish(fbb.endTable());
+          return object.id;
+        },
+        objectFromFB: (obx.Store store, ByteData fbData) {
+          final buffer = fb.BufferContext(fbData);
+          final rootOffset = buffer.derefObject(0);
+
+          final object = ArticleFournisseurEntity()
+            ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+            ..uuid = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 6, '')
+            ..articleUuid = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 8, '')
+            ..fournisseurUuid = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 10, '')
+            ..syncStatus = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 12, '')
+            ..isDeleted =
+                const fb.BoolReader().vTableGet(buffer, rootOffset, 14, false)
+            ..deviceId = const fb.StringReader(asciiOptimization: true)
+                .vTableGet(buffer, rootOffset, 16, '')
+            ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0))
+            ..createdAt = DateTime.fromMillisecondsSinceEpoch(
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 20, 0));
 
           return object;
         })
@@ -3333,6 +3535,18 @@ class AppSettingsEntity_ {
   /// See [AppSettingsEntity.updatedAt].
   static final updatedAt =
       obx.QueryDateProperty<AppSettingsEntity>(_entities[1].properties[9]);
+
+  /// See [AppSettingsEntity.isProvisioned].
+  static final isProvisioned =
+      obx.QueryBooleanProperty<AppSettingsEntity>(_entities[1].properties[10]);
+
+  /// See [AppSettingsEntity.provisionedBy].
+  static final provisionedBy =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[1].properties[11]);
+
+  /// See [AppSettingsEntity.loggedInUserUuid].
+  static final loggedInUserUuid =
+      obx.QueryStringProperty<AppSettingsEntity>(_entities[1].properties[12]);
 }
 
 /// [ArticleEntity] entity fields to define ObjectBox queries.
@@ -3412,6 +3626,14 @@ class ArticleEntity_ {
   /// See [ArticleEntity.createdAt].
   static final createdAt =
       obx.QueryDateProperty<ArticleEntity>(_entities[2].properties[18]);
+
+  /// See [ArticleEntity.fournisseurUuid].
+  static final fournisseurUuid =
+      obx.QueryStringProperty<ArticleEntity>(_entities[2].properties[19]);
+
+  /// See [ArticleEntity.madeIn].
+  static final madeIn =
+      obx.QueryStringProperty<ArticleEntity>(_entities[2].properties[20]);
 }
 
 /// [ArticleInventaireEntity] entity fields to define ObjectBox queries.
@@ -3980,6 +4202,11 @@ class FournisseurEntity_ {
   /// See [FournisseurEntity.createdAt].
   static final createdAt =
       obx.QueryDateProperty<FournisseurEntity>(_entities[10].properties[17]);
+
+  /// see [FournisseurEntity.articles]
+  static final articles =
+      obx.QueryRelationToMany<FournisseurEntity, ArticleEntity>(
+          _entities[10].relations[0]);
 }
 
 /// [HistoriqueMouvementEntity] entity fields to define ObjectBox queries.
@@ -4442,4 +4669,52 @@ class UtilisateurEntity_ {
   /// See [UtilisateurEntity.createdAt].
   static final createdAt =
       obx.QueryDateProperty<UtilisateurEntity>(_entities[19].properties[14]);
+
+  /// See [UtilisateurEntity.salt].
+  static final salt =
+      obx.QueryStringProperty<UtilisateurEntity>(_entities[19].properties[15]);
+
+  /// See [UtilisateurEntity.deviceId].
+  static final deviceId =
+      obx.QueryStringProperty<UtilisateurEntity>(_entities[19].properties[16]);
+}
+
+/// [ArticleFournisseurEntity] entity fields to define ObjectBox queries.
+class ArticleFournisseurEntity_ {
+  /// See [ArticleFournisseurEntity.id].
+  static final id = obx.QueryIntegerProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[0]);
+
+  /// See [ArticleFournisseurEntity.uuid].
+  static final uuid = obx.QueryStringProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[1]);
+
+  /// See [ArticleFournisseurEntity.articleUuid].
+  static final articleUuid = obx.QueryStringProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[2]);
+
+  /// See [ArticleFournisseurEntity.fournisseurUuid].
+  static final fournisseurUuid =
+      obx.QueryStringProperty<ArticleFournisseurEntity>(
+          _entities[20].properties[3]);
+
+  /// See [ArticleFournisseurEntity.syncStatus].
+  static final syncStatus = obx.QueryStringProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[4]);
+
+  /// See [ArticleFournisseurEntity.isDeleted].
+  static final isDeleted = obx.QueryBooleanProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[5]);
+
+  /// See [ArticleFournisseurEntity.deviceId].
+  static final deviceId = obx.QueryStringProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[6]);
+
+  /// See [ArticleFournisseurEntity.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[7]);
+
+  /// See [ArticleFournisseurEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<ArticleFournisseurEntity>(
+      _entities[20].properties[8]);
 }

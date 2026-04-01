@@ -78,8 +78,6 @@ class AppSettingsEntity {
   bool isProvisioned = false; // Nouveau: est-ce que le terminal est approuvé?
   String? provisionedBy;      // UUID de l'admin qui a scanné le QR
 
-  String? loggedInUserUuid;   // Session persistante : UUID de l'utilisateur connecté
-
   @Property(type: PropertyType.date)
   DateTime updatedAt = DateTime.now();
 }
@@ -228,6 +226,9 @@ class FournisseurEntity {
   bool actif = true;
   String? observations;
 
+  // ── Relations ──
+  final articles = ToMany<ArticleEntity>();
+
   // ── Sync ──
   String syncStatus = 'synced';
   bool isDeleted = false;
@@ -345,8 +346,11 @@ class ArticleEntity {
   String designation = '';
   String? description;
   String? categorieUuid;
-  String? fournisseurUuid; // Nouveau
-  String? madeIn; // Nouveau
+  
+  @Deprecated('Utiliser la relation fournisseurs (ToMany)')
+  String? fournisseurUuid; 
+  
+  String? madeIn;
   String uniteMesure = 'unité';
   String? codeGtin; // GS1 international
   String? codeUnspsc; // Référentiel OMS
@@ -355,6 +359,10 @@ class ArticleEntity {
   int stockMinimum = 0;
   bool estSerialise = false; // A-t-il des N° série fabricant ?
   bool actif = true;
+
+  // ── Relations ──
+  @Backlink('articles')
+  final fournisseurs = ToMany<FournisseurEntity>();
 
   // ── Sync ──
   String syncStatus = 'synced';
@@ -413,6 +421,61 @@ class ArticleEntity {
       ..syncStatus = 'synced';
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABLE DE JONCTION — Pour la synchronisation M:M
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Entity()
+class ArticleFournisseurEntity {
+  @Id()
+  int id = 0;
+
+  @Unique()
+  String uuid = '';
+
+  @Index()
+  String articleUuid = '';
+
+  @Index()
+  String fournisseurUuid = '';
+
+  // ── Sync ──
+  String syncStatus = 'synced';
+  bool isDeleted = false;
+  String deviceId = '';
+
+  @Property(type: PropertyType.date)
+  DateTime updatedAt = DateTime.now();
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt = DateTime.now();
+
+  ArticleFournisseurEntity();
+
+  Map<String, dynamic> toSupabaseMap() => {
+    'uuid': uuid,
+    'article_uuid': articleUuid,
+    'fournisseur_uuid': fournisseurUuid,
+    'is_deleted': isDeleted,
+    'device_id': deviceId,
+    'updated_at': updatedAt.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  static ArticleFournisseurEntity fromSupabaseMap(Map<String, dynamic> m) {
+    return ArticleFournisseurEntity()
+      ..uuid = m['uuid'] ?? ''
+      ..articleUuid = m['article_uuid'] ?? ''
+      ..fournisseurUuid = m['fournisseur_uuid'] ?? ''
+      ..isDeleted = m['is_deleted'] ?? false
+      ..deviceId = m['device_id'] ?? ''
+      ..updatedAt = DateTime.parse(m['updated_at'])
+      ..createdAt = DateTime.parse(m['created_at'])
+      ..syncStatus = 'synced';
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 

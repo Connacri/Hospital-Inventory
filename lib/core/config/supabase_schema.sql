@@ -108,6 +108,22 @@ CREATE TABLE IF NOT EXISTS services_hopital (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- JONCTIONS M:M
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS articles_fournisseurs (
+  id                BIGSERIAL PRIMARY KEY,
+  uuid              UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+  article_uuid      UUID NOT NULL REFERENCES articles(uuid) ON DELETE CASCADE,
+  fournisseur_uuid  UUID NOT NULL REFERENCES fournisseurs(uuid) ON DELETE CASCADE,
+  is_deleted        BOOLEAN DEFAULT false,
+  device_id         TEXT DEFAULT '',
+  updated_at        TIMESTAMPTZ DEFAULT now(),
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(article_uuid, fournisseur_uuid)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- ACHATS
 -- ─────────────────────────────────────────────────────────────────────────────
 

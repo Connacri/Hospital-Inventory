@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../objectbox.g.dart';
@@ -20,6 +21,7 @@ class AuthProvider extends ChangeNotifier {
   AuthProvider._();
 
   final _store = ObjectBoxStore.instance;
+  static const _sessionUserUuidKey = 'auth.logged_in_user_uuid';
 
   UtilisateurEntity? _currentUser;
   String? _authError;
@@ -39,9 +41,9 @@ class AuthProvider extends ChangeNotifier {
     if (_isInitialized) return;
     
     try {
-      final settings = _getSettings();
-      final userUuid = settings.loggedInUserUuid;
-      debugPrint('AUTH_DEBUG: initialize() - userUuid: $userUuid');
+      final prefs = await SharedPreferences.getInstance();
+      final userUuid = prefs.getString(_sessionUserUuidKey);
+      debugPrint('AUTH_DEBUG: initialize() - userUuid (prefs): $userUuid');
 
       if (userUuid != null && userUuid.isNotEmpty) {
         final user = _store.utilisateurs
@@ -55,10 +57,10 @@ class AuthProvider extends ChangeNotifier {
           _currentUser = user;
         } else {
           debugPrint('AUTH_DEBUG: initialize() - user invalid or not found, resetting session');
-          await _updateSession(null);
+          await _persistSession(null);
         }
       } else {
-        debugPrint('AUTH_DEBUG: initialize() - no userUuid in settings');
+        debugPrint('AUTH_DEBUG: initialize() - no userUuid in prefs');
       }
     } catch (e) {
       debugPrint('Erreur lors de la restauration de la session: $e');
@@ -133,7 +135,7 @@ class AuthProvider extends ChangeNotifier {
       
       debugPrint('AUTH_DEBUG: login success for ${user.matricule} (uuid: ${user.uuid})');
       _currentUser = user;
-      await _updateSession(user.uuid);
+      await _persistSession(user.uuid);
       
       _isLoading = false;
       notifyListeners();
@@ -149,35 +151,22 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     debugPrint('AUTH_DEBUG: manual logout');
     _currentUser = null;
-    await _updateSession(null);
+    await _persistSession(null);
     notifyListeners();
   }
 
   // ── Helpers Session ──────────────────────────────────────────────────────
 
-  AppSettingsEntity _getSettings() {
-    final all = _store.appSettings.getAll();
-    if (all.isEmpty) {
-      debugPrint('AUTH_DEBUG: _getSettings() - creating new AppSettings');
-      final s = AppSettingsEntity();
-      _store.appSettings.put(s);
-      return s;
+  Future<void> _persistSession(String? uuid) async {
+    debugPrint('AUTH_DEBUG: _persistSession(uuid: $uuid)');
+    final prefs = await SharedPreferences.getInstance();
+    if (uuid == null || uuid.isEmpty) {
+      await prefs.remove(_sessionUserUuidKey);
+      return;
     }
-    debugPrint('AUTH_DEBUG: _getSettings() - loaded settings (id: ${all.first.id}, user: ${all.first.loggedInUserUuid})');
-    return all.first;
+    await prefs.setString(_sessionUserUuidKey, uuid);
   }
 
-  Future<void> _updateSession(String? uuid) async {
-    debugPrint('AUTH_DEBUG: _updateSession(uuid: $uuid)');
-    final s = _getSettings();
-    s.loggedInUserUuid = uuid;
-    s.updatedAt = DateTime.now();
-    _store.appSettings.put(s);
-    
-    // Vérification immédiate
-    final check = _store.appSettings.get(s.id);
-    debugPrint('AUTH_DEBUG: _updateSession check after put - user in DB: ${check?.loggedInUserUuid}');
-  }
 
   // ── Création d'utilisateur (Admin seulement) ─────────────────────────────
 
