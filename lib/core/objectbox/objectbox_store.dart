@@ -71,6 +71,16 @@ class ObjectBoxStore {
     sequences = _store.box<SequenceEntity>();
     supabaseConfigs = _store.box<SupabaseConfigEntity>();
     appSettings = _store.box<AppSettingsEntity>();
+    
+    // DEBUG SETTINGS
+    final allSettings = appSettings.getAll();
+    if (allSettings.isEmpty) {
+      print('OBX_DEBUG: appSettings is EMPTY at startup');
+    } else {
+      print('OBX_DEBUG: appSettings count: ${allSettings.length}');
+      print('OBX_DEBUG: appSettings[0] user: ${allSettings.first.loggedInUserUuid}');
+    }
+
     syncQueue = _store.box<SyncQueueEntity>();
     conflicts = _store.box<ConflictEntity>();
     utilisateurs = _store.box<UtilisateurEntity>();
@@ -154,32 +164,36 @@ class ObjectBoxStore {
         .build()
         .findFirst();
 
+    // Si l'utilisateur n'existe pas ou a un hash ancien format, on (re)crée
     if (existing == null ||
         existing.passwordHash == null ||
         !existing.passwordHash!.contains(':')) {
-      if (existing != null) utilisateurs.remove(existing.id);
-      _createUser(matricule, password, nom, role);
+      
+      final salt = const Uuid().v4();
+      final bytes = utf8.encode('$password:$salt:HOPITAL_SECURE');
+      final hash = sha256.convert(bytes).toString();
+
+      final user = existing ?? UtilisateurEntity();
+      
+      // On ne change l'UUID QUE si c'est une création pure
+      if (existing == null) {
+        user.uuid = const Uuid().v4();
+        user.createdAt = DateTime.now();
+      }
+      
+      user.matricule = matricule;
+      user.nomComplet = nom;
+      user.role = role;
+      user.passwordHash = '$salt:$hash';
+      user.actif = true;
+      user.updatedAt = DateTime.now();
+      user.syncStatus = 'synced';
+
+      utilisateurs.put(user);
     }
   }
 
-  void _createUser(String matricule, String password, String nom, String role) {
-    final salt = const Uuid().v4();
-    final bytes = utf8.encode('$password:$salt:HOPITAL_SECURE');
-    final hash = sha256.convert(bytes).toString();
-
-    final user = UtilisateurEntity()
-      ..uuid = const Uuid().v4()
-      ..matricule = matricule
-      ..nomComplet = nom
-      ..role = role
-      ..passwordHash = '$salt:$hash'
-      ..actif = true
-      ..createdAt = DateTime.now()
-      ..updatedAt = DateTime.now()
-      ..syncStatus = 'synced';
-
-    utilisateurs.put(user);
-  }
+  // Supprimer la méthode _createUser devenue inutile car fusionnée dans _ensureUser
 
   CategorieArticleEntity _ensureCategorie(String code, String libelle, String type) {
     var existing = categories.query(CategorieArticleEntity_.code.equals(code)).build().findFirst();

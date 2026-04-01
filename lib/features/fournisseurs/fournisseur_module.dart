@@ -719,8 +719,14 @@ class FournisseurAutocomplete extends StatelessWidget {
     final repo = FournisseurRepository();
     final theme = Theme.of(context);
 
+    // DETERMINER LE TEXTE INITIAL CORRECT
+    String initialText = '';
+    if (initialValue != null) {
+      initialText = '${initialValue!.code} — ${initialValue!.raisonSociale}';
+    }
+
     return Autocomplete<FournisseurEntity>(
-      initialValue: TextEditingValue(text: initialValue?.raisonSociale ?? ''),
+      initialValue: TextEditingValue(text: initialText),
       displayStringForOption: (f) => '${f.code} — ${f.raisonSociale}',
       optionsBuilder: (value) {
         if (value.text.isEmpty) return repo.getAll().take(10);
@@ -728,6 +734,11 @@ class FournisseurAutocomplete extends StatelessWidget {
       },
       onSelected: onSelected,
       fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
+        // CORRECTION: Si le controlleur est vide mais qu'on a une valeur initiale (rebuild), on remplit
+        if (ctrl.text.isEmpty && initialText.isNotEmpty) {
+          ctrl.text = initialText;
+        }
+
         return TextFormField(
           controller: ctrl,
           focusNode: focusNode,

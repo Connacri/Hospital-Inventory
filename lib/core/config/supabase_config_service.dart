@@ -75,6 +75,7 @@ class SupabaseConfigService extends ChangeNotifier {
 
   SupabaseConfigEntity? _activeConfig;
   SupabaseClient? _client;
+  SupabaseClient? _serviceClient;
   bool _isInitialized = false;
   bool _isInitializing = false;
   String? _initError;
@@ -90,6 +91,8 @@ class SupabaseConfigService extends ChangeNotifier {
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   SupabaseClient? get client => isSupabaseReady ? _client : null;
+  SupabaseClient? get serviceClient => isSupabaseReady ? _serviceClient : null;
+  SupabaseClient? get syncClient => serviceClient ?? client;
 
   // ─────────────────────────────────────────
   // Initialisation au démarrage
@@ -114,6 +117,7 @@ class SupabaseConfigService extends ChangeNotifier {
         _activeConfig = null;
         _isInitialized = false;
         _client = null;
+        _serviceClient = null;
       }
     } catch (e) {
       _log.e('SupabaseConfigService initialisation error: $e');
@@ -319,6 +323,11 @@ class SupabaseConfigService extends ChangeNotifier {
     if (current != null) {
       await current.dispose();
     }
+    final currentService = _serviceClient;
+    _serviceClient = null;
+    if (currentService != null) {
+      await currentService.dispose();
+    }
     notifyListeners();
   }
 
@@ -344,11 +353,13 @@ class SupabaseConfigService extends ChangeNotifier {
   Future<void> _initSupabaseClient(SupabaseConfigEntity config) async {
     final url = EncryptionService.decrypt(config.url);
     final anonKey = EncryptionService.decrypt(config.anonKey);
+    final serviceRoleKey = EncryptionService.decrypt(config.serviceRoleKey);
 
     if (url.isEmpty || anonKey.isEmpty) {
       _initError = 'Clés de configuration corrompues';
       _isInitialized = false;
       _client = null;
+      _serviceClient = null;
       return;
     }
 
@@ -373,6 +384,15 @@ class SupabaseConfigService extends ChangeNotifier {
         await previous.dispose();
       }
 
+      // Client service_role pour sync (bypass RLS)
+      final previousService = _serviceClient;
+      _serviceClient = serviceRoleKey.isNotEmpty
+          ? SupabaseClient(url, serviceRoleKey)
+          : null;
+      if (previousService != null) {
+        await previousService.dispose();
+      }
+
       _activeConfig = config;
       _isInitialized = true;
       _initError = null;
@@ -394,6 +414,7 @@ class SupabaseConfigService extends ChangeNotifier {
       _isInitialized = false;
       _initError = _parseError(e.toString());
       _client = null;
+      _serviceClient = null;
       config.testError = _initError;
       _store.supabaseConfigs.put(config);
       _log.e('Erreur init client Supabase: $e');

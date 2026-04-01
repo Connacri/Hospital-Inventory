@@ -65,7 +65,7 @@ const _syncTableOrder = [
   'categories_article',
   'articles',
   'services_hopital',
-  'profils_utilisateurs',
+  'utilisateurs', // Correction: profils_utilisateurs -> utilisateurs
   'bons_commande',
   'factures',
   'lignes_facture',
@@ -177,7 +177,7 @@ class SyncWorker {
     item.status = 'pushing';
     _store.syncQueue.put(item);
 
-    final client = SupabaseConfigService.instance.client!;
+    final client = SupabaseConfigService.instance.syncClient!;
 
     try {
       final payload = jsonDecode(item.payload) as Map<String, dynamic>;
@@ -228,7 +228,7 @@ class SyncWorker {
   }
 
   Future<void> _pullDelta() async {
-    final client = SupabaseConfigService.instance.client!;
+    final client = SupabaseConfigService.instance.syncClient!;
     final since = SyncMetadata.getLastPullTime().toIso8601String();
 
     for (final table in _syncTableOrder) {
@@ -280,7 +280,7 @@ class SyncWorker {
     return switch (table) {
       'fournisseurs' => _store.fournisseurs.getAll().map((e) => e.toSupabaseMap()).toList(),
       'articles' => _store.articles.getAll().map((e) => e.toSupabaseMap()).toList(),
-      'profils_utilisateurs' => _store.utilisateurs.getAll().map((e) => e.toSupabaseMap()).toList(),
+      'utilisateurs' => _store.utilisateurs.getAll().map((e) => e.toSupabaseMap()).toList(),
       'categories_article' => _store.categories.getAll().map((e) => e.toSupabaseMap()).toList(),
       'services_hopital' => _store.services.getAll().map((e) => e.toSupabaseMap()).toList(),
       'articles_inventaire' => _store.articlesInventaire.getAll().map((e) => e.toSupabaseMap()).toList(),
@@ -312,7 +312,7 @@ class PullMerger {
             _mergeGeneric(box: _store.fournisseurs, row: row, query: (uuid) => _store.fournisseurs.query(FournisseurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => FournisseurEntity.fromSupabaseMap(m));
           case 'articles':
             _mergeGeneric(box: _store.articles, row: row, query: (uuid) => _store.articles.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => ArticleEntity.fromSupabaseMap(m));
-          case 'profils_utilisateurs':
+          case 'utilisateurs':
             _mergeGeneric(box: _store.utilisateurs, row: row, query: (uuid) => _store.utilisateurs.query(UtilisateurEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _userFromMap(m));
           case 'services_hopital':
             _mergeGeneric(box: _store.services, row: row, query: (uuid) => _store.services.query(ServiceHopitalEntity_.uuid.equals(uuid)).build().findFirst(), fromMap: (m) => _serviceFromMap(m));
@@ -423,7 +423,7 @@ class ConflictDetector {
   Stream<List<ConflictEntity>> get conflictsStream => _conflictStreamController.stream;
 
   Future<ConflictData?> check({required String tableName, required String uuid, required Map<String, dynamic> localPayload, required String deviceId}) async {
-    final client = SupabaseConfigService.instance.client;
+    final client = SupabaseConfigService.instance.syncClient;
     if (client == null) return null;
     try {
       final remote = await client.from(tableName).select().eq('uuid', uuid).maybeSingle().timeout(const Duration(seconds: 15));
@@ -453,7 +453,7 @@ class ConflictDetector {
     conflict.resolvedByUuid = resolvedByUuid;
     conflict.resolvedAt = DateTime.now();
     _store.conflicts.put(conflict);
-    final client = SupabaseConfigService.instance.client;
+    final client = SupabaseConfigService.instance.syncClient;
     if (client != null) {
       resolvedPayload['updated_at'] = DateTime.now().toIso8601String();
       resolvedPayload['device_id'] = DeviceInfoService.id;

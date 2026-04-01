@@ -5,10 +5,12 @@
 // 2. Encryption (dériver clé depuis machine ID)
 // 3. DeviceInfo (ID unique du poste)
 // 4. Supabase   (optionnel — depuis config ObjectBox)
+// 5. Auth Session (restauration session)
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/auth/auth_provider.dart';
 import 'core/objectbox/objectbox_store.dart';
 import 'core/security/encryption_service.dart';
 import 'core/services/device_info_service.dart';
@@ -29,19 +31,15 @@ void main() async {
 
   // ── Étape 4 : Supabase — optionnel, ne bloque pas le démarrage ──
   await SupabaseConfigService.instance.initialize();
-  // Si pas de config → app démarre en mode offline, aucun crash
+
+  // ── Étape 5 : Restauration de la session utilisateur ──
+  await AuthProvider.instance.initialize();
 
   runApp(
     MultiProvider(
       providers: [
-        // Config Supabase — accessible partout
-        ChangeNotifierProvider.value(
-          value: SupabaseConfigService.instance,
-        ),
-        // Autres providers à ajouter au fur et à mesure
-        // ChangeNotifierProvider(create: (_) => SyncEngine()),
-        // ChangeNotifierProvider(create: (_) => AuthProvider()),
-        // ChangeNotifierProvider(create: (_) => FournisseurProvider()),
+        ChangeNotifierProvider.value(value: SupabaseConfigService.instance),
+        ChangeNotifierProvider.value(value: AuthProvider.instance),
       ],
       child: const HopitalInventaireApp(),
     ),

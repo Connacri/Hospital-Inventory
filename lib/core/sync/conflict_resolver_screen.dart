@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../objectbox/entities.dart';
 import '../objectbox/objectbox_store.dart';
 import 'sync_engine.dart';
+import '../../shared/widgets/app_toast.dart';
 
 // ── Modèle d'un diff de champ ──────────────────────────────────────────────
 
@@ -351,12 +352,7 @@ class _ConflictResolverScreenState extends State<ConflictResolverScreen> {
     setState(() => _isResolving = false);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Conflit résolu et synchronisé'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      AppToast.show(context, 'Conflit résolu et synchronisé');
       Navigator.pop(context);
     }
   }

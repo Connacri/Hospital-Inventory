@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../features/administration/administration_module.dart';
+import '../../features/administration/supabase_config/supabase_config_screen.dart';
 import '../../features/articles/article_module.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/fournisseurs/fournisseur_module.dart';
@@ -24,17 +25,57 @@ class _MainShellState extends State<MainShell> {
     const DashboardScreen(),
     const InventaireListScreen(),
     const FacturesListScreen(),
-    const ArticlesListScreen(),
+    const ArticleListScreen(),
     const FournisseursListScreen(),
     const _AdminShell(),
   ];
 
+  final List<Map<String, dynamic>> _menuItems = [
+    {'icon': Icons.dashboard_outlined, 'selectedIcon': Icons.dashboard, 'label': 'Tableau de bord'},
+    {'icon': Icons.inventory_2_outlined, 'selectedIcon': Icons.inventory_2, 'label': 'Inventaire Physique'},
+    {'icon': Icons.receipt_long_outlined, 'selectedIcon': Icons.receipt_long, 'label': 'Réceptions & Achats'},
+    {'icon': Icons.category_outlined, 'selectedIcon': Icons.category, 'label': 'Articles'},
+    {'icon': Icons.business_outlined, 'selectedIcon': Icons.business, 'label': 'Fournisseurs'},
+    {'icon': Icons.admin_panel_settings_outlined, 'selectedIcon': Icons.admin_panel_settings, 'label': 'Administration'},
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isLarge = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
+      appBar: !isLarge ? AppBar(
+        title: Text(_menuItems[_selectedIndex]['label']),
+      ) : null,
+      drawer: !isLarge ? Drawer(
+        child: Column(
+          children: [
+            const _UserHeader(isDrawer: true),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _menuItems.length,
+                itemBuilder: (context, i) => ListTile(
+                  leading: Icon(_selectedIndex == i ? _menuItems[i]['selectedIcon'] : _menuItems[i]['icon']),
+                  title: Text(_menuItems[i]['label']),
+                  selected: _selectedIndex == i,
+                  onTap: () {
+                    setState(() => _selectedIndex = i);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
+              onTap: () => context.read<AuthProvider>().logout(),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ) : null,
       body: Row(
         children: [
           if (isLarge)
@@ -42,15 +83,12 @@ class _MainShellState extends State<MainShell> {
               extended: true,
               selectedIndex: _selectedIndex,
               onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-              leading: const _UserHeader(),
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Tableau de bord')),
-                NavigationRailDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: Text('Inventaire Physique')),
-                NavigationRailDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: Text('Réceptions & Achats')),
-                NavigationRailDestination(icon: Icon(Icons.category_outlined), selectedIcon: Icon(Icons.category), label: Text('Articles')),
-                NavigationRailDestination(icon: Icon(Icons.business_outlined), selectedIcon: Icon(Icons.business), label: Text('Fournisseurs')),
-                NavigationRailDestination(icon: Icon(Icons.admin_panel_settings_outlined), selectedIcon: Icon(Icons.admin_panel_settings), label: Text('Administration')),
-              ],
+              leading: const _UserHeader(isDrawer: false),
+              destinations: _menuItems.map((item) => NavigationRailDestination(
+                icon: Icon(item['icon']),
+                selectedIcon: Icon(item['selectedIcon']),
+                label: Text(item['label']),
+              )).toList(),
               trailing: Expanded(
                 child: Align(
                   alignment: Alignment.bottomCenter,
@@ -64,33 +102,48 @@ class _MainShellState extends State<MainShell> {
                 ),
               ),
             ),
-          const VerticalDivider(width: 1),
+          if (isLarge) const VerticalDivider(width: 1),
           Expanded(child: _screens[_selectedIndex]),
         ],
       ),
-      bottomNavigationBar: !isLarge
-          ? NavigationBar(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-              destinations: const [
-                NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
-                NavigationDestination(icon: Icon(Icons.inventory_2_outlined), label: 'Inventaire'),
-                NavigationDestination(icon: Icon(Icons.receipt_long_outlined), label: 'Réceptions'),
-                NavigationDestination(icon: Icon(Icons.admin_panel_settings_outlined), label: 'Admin'),
-              ],
-            )
-          : null,
     );
   }
 }
 
 class _UserHeader extends StatelessWidget {
-  const _UserHeader();
+  final bool isDrawer;
+  const _UserHeader({required this.isDrawer});
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const SizedBox.shrink();
+
+    if (isDrawer) {
+      return DrawerHeader(
+        decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: Text(user.nomComplet[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 24)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(user.nomComplet, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(user.role.toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -120,7 +173,7 @@ class _AdminShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Administration Système'),
@@ -129,6 +182,7 @@ class _AdminShell extends StatelessWidget {
               Tab(icon: Icon(Icons.people), text: 'Utilisateurs'),
               Tab(icon: Icon(Icons.corporate_fare), text: 'Services'),
               Tab(icon: Icon(Icons.category), text: 'Catégories'),
+              Tab(icon: Icon(Icons.cloud_outlined), text: 'Supabase'),
             ],
           ),
         ),
@@ -137,6 +191,7 @@ class _AdminShell extends StatelessWidget {
             UsersListScreen(),
             ServicesListScreen(),
             CategoriesListScreen(),
+            SupabaseConfigScreen(),
           ],
         ),
       ),

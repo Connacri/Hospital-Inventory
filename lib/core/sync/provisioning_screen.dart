@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../services/device_info_service.dart';
 import '../services/settings_provider.dart';
+import '../../shared/widgets/app_toast.dart';
 
 class ProvisioningScreen extends StatelessWidget {
   final VoidCallback onBack;
@@ -97,8 +98,6 @@ class ProvisioningScreen extends StatelessWidget {
       by: 'ADMIN_TEST_BYPASS',
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Appareil validé ! Redémarrage...')),
-    );
+    AppToast.show(context, 'Appareil validé ! Redémarrage...');
   }
 }

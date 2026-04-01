@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../core/config/supabase_config_service.dart';
 import '../../../core/objectbox/entities.dart';
 
@@ -361,18 +362,7 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
 
     setState(() => _isSaving = false);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Supabase configuré et actif'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
+      AppToast.show(context, 'Supabase configuré et actif');
     }
   }
 
@@ -441,12 +431,9 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
     setState(() { _testResult = null; });
     _tabCtrl.animateTo(0);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Saisir à nouveau les clés — elles ne sont pas affichées pour sécurité',
-        ),
-      ),
+    AppToast.show(
+      context,
+      'Saisir à nouveau les clés — elles ne sont pas affichées pour sécurité',
     );
   }
 
@@ -454,9 +441,7 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
     // Re-tester avant activation
     final url = _urlCtrl.text;
     if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Charger et re-tester avant activation')),
-      );
+      AppToast.show(context, 'Charger et re-tester avant activation', isError: true);
       return;
     }
   }

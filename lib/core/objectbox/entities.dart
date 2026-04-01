@@ -78,6 +78,8 @@ class AppSettingsEntity {
   bool isProvisioned = false; // Nouveau: est-ce que le terminal est approuvé?
   String? provisionedBy;      // UUID de l'admin qui a scanné le QR
 
+  String? loggedInUserUuid;   // Session persistante : UUID de l'utilisateur connecté
+
   @Property(type: PropertyType.date)
   DateTime updatedAt = DateTime.now();
 }

@@ -7,7 +7,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../objectbox.g.dart';
@@ -25,12 +24,49 @@ class AuthProvider extends ChangeNotifier {
   UtilisateurEntity? _currentUser;
   String? _authError;
   bool _isLoading = false;
+  bool _isInitialized = false;
 
   UtilisateurEntity? get currentUser => _currentUser;
   String? get authError => _authError;
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _currentUser != null;
+  bool get isInitialized => _isInitialized;
   String get role => _currentUser?.role ?? 'consultation';
+
+  // ── Initialisation — Restauration de session ──────────────────────────────
+
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+    
+    try {
+      final settings = _getSettings();
+      final userUuid = settings.loggedInUserUuid;
+      debugPrint('AUTH_DEBUG: initialize() - userUuid: $userUuid');
+
+      if (userUuid != null && userUuid.isNotEmpty) {
+        final user = _store.utilisateurs
+            .query(UtilisateurEntity_.uuid.equals(userUuid))
+            .build()
+            .findFirst();
+        
+        debugPrint('AUTH_DEBUG: initialize() - user found: ${user?.matricule}');
+
+        if (user != null && user.actif) {
+          _currentUser = user;
+        } else {
+          debugPrint('AUTH_DEBUG: initialize() - user invalid or not found, resetting session');
+          await _updateSession(null);
+        }
+      } else {
+        debugPrint('AUTH_DEBUG: initialize() - no userUuid in settings');
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de la restauration de la session: $e');
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
+  }
 
   // ── Permissions par rôle ──────────────────────────────────────────────────
   bool get canWrite => ['admin', 'inventaire', 'magasin'].contains(role);
@@ -94,7 +130,11 @@ class AuthProvider extends ChangeNotifier {
       // 3. Authentification réussie
       user.derniereConnexion = DateTime.now();
       _store.utilisateurs.put(user);
+      
+      debugPrint('AUTH_DEBUG: login success for ${user.matricule} (uuid: ${user.uuid})');
       _currentUser = user;
+      await _updateSession(user.uuid);
+      
       _isLoading = false;
       notifyListeners();
       return true;
@@ -106,9 +146,37 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
+    debugPrint('AUTH_DEBUG: manual logout');
     _currentUser = null;
+    await _updateSession(null);
     notifyListeners();
+  }
+
+  // ── Helpers Session ──────────────────────────────────────────────────────
+
+  AppSettingsEntity _getSettings() {
+    final all = _store.appSettings.getAll();
+    if (all.isEmpty) {
+      debugPrint('AUTH_DEBUG: _getSettings() - creating new AppSettings');
+      final s = AppSettingsEntity();
+      _store.appSettings.put(s);
+      return s;
+    }
+    debugPrint('AUTH_DEBUG: _getSettings() - loaded settings (id: ${all.first.id}, user: ${all.first.loggedInUserUuid})');
+    return all.first;
+  }
+
+  Future<void> _updateSession(String? uuid) async {
+    debugPrint('AUTH_DEBUG: _updateSession(uuid: $uuid)');
+    final s = _getSettings();
+    s.loggedInUserUuid = uuid;
+    s.updatedAt = DateTime.now();
+    _store.appSettings.put(s);
+    
+    // Vérification immédiate
+    final check = _store.appSettings.get(s.id);
+    debugPrint('AUTH_DEBUG: _updateSession check after put - user in DB: ${check?.loggedInUserUuid}');
   }
 
   // ── Création d'utilisateur (Admin seulement) ─────────────────────────────
@@ -138,7 +206,7 @@ class AuthProvider extends ChangeNotifier {
 
     SyncEventBus.instance.emit(
       SyncEvent(
-        tableName: 'profils_utilisateurs',
+        tableName: 'utilisateurs',
         operation: CrudOperation.insert,
         recordUuid: user.uuid,
         payload: _toSupabaseMap(user),

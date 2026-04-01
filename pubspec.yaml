@@ -2,7 +2,7 @@ name: plateau
 description: "A new Inventaire project."
 publish_to: 'none'
 
-version: 1.0.0+11
+version: 1.0.0+12
 
 environment:
   sdk: ^3.10.4
@@ -53,6 +53,7 @@ dependencies:
   shared_preferences: ^2.5.5
   logger: ^2.7.0
   equatable: ^2.0.8
+  faker: ^2.2.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

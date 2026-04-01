@@ -17,6 +17,7 @@ import '../../objectbox.g.dart';
 import '../articles/article_module.dart';
 import '../fournisseurs/fournisseur_module.dart';
 import '../inventaire/inventaire_module.dart';
+import '../../shared/widgets/app_toast.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -212,6 +213,89 @@ class FactureProvider extends ChangeNotifier {
     loadAll();
     return saved;
   }
+
+  Future<FactureEntity> updateFacture({
+    required FactureEntity existing,
+    required String numeroFacture,
+    required String fournisseurUuid,
+    required DateTime dateFacture,
+    required List<LigneFactureEntity> lignes,
+    required List<List<String?>> serialsPerLine,
+    String? bcUuid,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    double ht = 0;
+    for (final l in lignes) {
+      ht += l.prixUnitaire * l.quantite;
+    }
+    double ttc = ht * 1.19;
+
+    existing.numeroFacture = numeroFacture;
+    existing.fournisseurUuid = fournisseurUuid;
+    existing.bcUuid = bcUuid;
+    existing.dateFacture = dateFacture;
+    existing.montantHt = ht;
+    existing.montantTtc = ttc;
+    existing.updatedAt = DateTime.now();
+
+    final saved = await _repo.update(existing);
+
+    // Supprimer les anciennes lignes et l'inventaire associé pour simplifier (re-batch)
+    final oldLignes = _ligneBox.query(LigneFactureEntity_.factureUuid.equals(existing.uuid)).build().find();
+    final invRepo = InventaireRepository();
+
+    for (final oldL in oldLignes) {
+      // Décrémenter stock
+      final article = ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(oldL.articleUuid)).build().findFirst();
+      if (article != null) {
+        article.stockActuel -= oldL.quantite;
+        ObjectBoxStore.instance.articles.put(article);
+      }
+      
+      // Supprimer inventaire physique
+      final items = ObjectBoxStore.instance.articlesInventaire.query(ArticleInventaireEntity_.ligneReceptionUuid.equals(oldL.uuid)).build().find();
+      for (final item in items) {
+        ObjectBoxStore.instance.articlesInventaire.remove(item.id);
+      }
+      
+      _ligneBox.remove(oldL.id);
+    }
+
+    // Recréer les nouvelles lignes
+    for (int i = 0; i < lignes.length; i++) {
+      final l = lignes[i];
+      final serials = serialsPerLine[i];
+      
+      l.factureUuid = saved.uuid;
+      if (l.uuid.isEmpty) l.uuid = const Uuid().v4();
+      l.createdAt = DateTime.now();
+      l.updatedAt = DateTime.now();
+      l.syncStatus = 'pending_push';
+      _ligneBox.put(l);
+
+      await invRepo.creerBatch(
+        articleUuid: l.articleUuid,
+        ficheReceptionUuid: saved.uuid,
+        ligneReceptionUuid: l.uuid,
+        quantite: l.quantite,
+        serials: serials,
+        valeurUnitaire: l.prixUnitaire,
+        createdByUuid: existing.createdByUuid,
+      );
+
+      final article = ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(l.articleUuid)).build().findFirst();
+      if (article != null) {
+        article.stockActuel += l.quantite;
+        ObjectBoxStore.instance.articles.put(article);
+      }
+    }
+
+    _isLoading = false;
+    loadAll();
+    return saved;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +347,8 @@ class BonCommandeAutocomplete extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FactureFormDialog extends StatefulWidget {
-  const FactureFormDialog({super.key});
+  final FactureEntity? existing;
+  const FactureFormDialog({super.key, this.existing});
 
   @override
   State<FactureFormDialog> createState() => _FactureFormDialogState();
@@ -282,7 +367,50 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
   @override
   void initState() {
     super.initState();
-    _addLigne();
+    if (widget.existing != null) {
+      final f = widget.existing!;
+      _numeroFacture.text = f.numeroFacture;
+      _dateFacture = f.dateFacture;
+      
+      _selectedFournisseur = ObjectBoxStore.instance.fournisseurs
+          .query(FournisseurEntity_.uuid.equals(f.fournisseurUuid))
+          .build()
+          .findFirst();
+          
+      if (f.bcUuid != null) {
+        _selectedBC = ObjectBoxStore.instance.bonsCommande
+            .query(BonCommandeEntity_.uuid.equals(f.bcUuid!))
+            .build()
+            .findFirst();
+      }
+
+      final dbLignes = ObjectBoxStore.instance.lignesFacture
+          .query(LigneFactureEntity_.factureUuid.equals(f.uuid))
+          .build()
+          .find();
+
+      for (final dl in dbLignes) {
+        final model = _LigneFormModel();
+        model.article = ObjectBoxStore.instance.articles
+            .query(ArticleEntity_.uuid.equals(dl.articleUuid))
+            .build()
+            .findFirst();
+        model.qtyController.text = dl.quantite.toString();
+        model.priceController.text = dl.prixUnitaire.toString();
+        
+        // Récupérer les serials
+        final items = ObjectBoxStore.instance.articlesInventaire
+            .query(ArticleInventaireEntity_.ligneReceptionUuid.equals(dl.uuid))
+            .build()
+            .find();
+        model.serials = items.map((i) => i.numeroSerieOrigine).toList();
+        model.updateSerialsCount(); // Assurer cohérence qté
+        
+        _lignes.add(model);
+      }
+    } else {
+      _addLigne();
+    }
   }
 
   void _addLigne() {
@@ -327,7 +455,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                       const Icon(Icons.receipt_long_outlined),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text('Réception Facture Fournisseur', 
+                        child: Text(widget.existing == null ? 'Réception Facture Fournisseur' : 'Modifier Facture ${widget.existing!.numeroFacture}', 
                           style: theme.textTheme.titleLarge,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -411,7 +539,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                     borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
                     border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
                   ),
@@ -541,7 +669,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
           icon: _isSaving 
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.check_circle_outline),
-          label: const Text('Valider la réception'),
+          label: Text(widget.existing == null ? 'Valider la réception' : 'Enregistrer les modifications'),
         ),
       ],
     );
@@ -576,7 +704,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving 
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Valider'),
+                  : Text(widget.existing == null ? 'Valider' : 'Enregistrer'),
               ),
             ),
           ],
@@ -603,13 +731,13 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedFournisseur == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez sélectionner un fournisseur')));
+      AppToast.show(context, 'Veuillez sélectionner un fournisseur', isError: true);
       return;
     }
     
     for (final l in _lignes) {
       if (l.article == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Certaines lignes n\'ont pas d\'article')));
+        AppToast.show(context, 'Certaines lignes n\'ont pas d\'article', isError: true);
         return;
       }
     }
@@ -627,29 +755,46 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
 
       final serialsPerLine = _lignes.map((l) => l.serials).toList();
 
-      await provider.createFactureComplet(
-        numeroFacture: _numeroFacture.text.trim(),
-        fournisseurUuid: _selectedFournisseur!.uuid,
-        bcUuid: _selectedBC?.uuid,
-        dateFacture: _dateFacture,
-        lignes: lignesEntities,
-        serialsPerLine: serialsPerLine,
-        createdByUuid: auth.currentUser?.uuid ?? '',
-      );
+      if (widget.existing != null) {
+        await provider.updateFacture(
+          existing: widget.existing!,
+          numeroFacture: _numeroFacture.text.trim(),
+          fournisseurUuid: _selectedFournisseur!.uuid,
+          bcUuid: _selectedBC?.uuid,
+          dateFacture: _dateFacture,
+          lignes: lignesEntities,
+          serialsPerLine: serialsPerLine,
+        );
+      } else {
+        await provider.createFactureComplet(
+          numeroFacture: _numeroFacture.text.trim(),
+          fournisseurUuid: _selectedFournisseur!.uuid,
+          bcUuid: _selectedBC?.uuid,
+          dateFacture: _dateFacture,
+          lignes: lignesEntities,
+          serialsPerLine: serialsPerLine,
+          createdByUuid: auth.currentUser?.uuid ?? '',
+        );
+      }
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Réception validée avec succès')));
+        AppToast.show(
+          context,
+          widget.existing == null
+              ? 'Réception validée avec succès'
+              : 'Facture mise à jour avec succès',
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 }
 
-class _LigneItemWidget extends StatelessWidget {
+class _LigneItemWidget extends StatefulWidget {
   final _LigneFormModel model;
   final VoidCallback onDelete;
   final VoidCallback onUpdate;
@@ -661,7 +806,46 @@ class _LigneItemWidget extends StatelessWidget {
   });
 
   @override
+  State<_LigneItemWidget> createState() => _LigneItemWidgetState();
+}
+
+class _LigneItemWidgetState extends State<_LigneItemWidget> {
+  final List<TextEditingController> _serialControllers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _syncControllers();
+  }
+
+  void _syncControllers() {
+    final q = widget.model.quantite;
+    if (_serialControllers.length != q) {
+      if (q > _serialControllers.length) {
+        for (int i = _serialControllers.length; i < q; i++) {
+          final val = widget.model.serials.length > i ? widget.model.serials[i] : null;
+          _serialControllers.add(TextEditingController(text: val));
+        }
+      } else {
+        for (int i = _serialControllers.length - 1; i >= q; i--) {
+          _serialControllers[i].dispose();
+          _serialControllers.removeAt(i);
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (var c in _serialControllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _syncControllers();
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 600;
@@ -675,28 +859,60 @@ class _LigneItemWidget extends StatelessWidget {
               else
                 _buildWideLigne(context),
               
-              if (model.article != null && model.article!.estSerialise)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 4),
-                  child: Row(
+              if (widget.model.article != null && (widget.model.article!.estSerialise || widget.model.quantite > 1))
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.qr_code_scanner, size: 14, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 30),
-                            alignment: Alignment.centerLeft,
-                          ),
-                          onPressed: () => _scanSerials(context),
-                          child: Text(model.serials.where((s) => s != null).length == model.quantite 
-                            ? 'Tous les S/N scannés ✅' 
-                            : 'Scanner les S/N (${model.serials.where((s) => s != null).length}/${model.quantite})',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                        ),
+                      Row(
+                        children: [
+                          Icon(Icons.qr_code_scanner, size: 16, color: Colors.blue.shade700),
+                          const SizedBox(width: 8),
+                          Text('Détails Unités (S/N)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
+                          const Spacer(),
+                          if (widget.model.article!.estSerialise)
+                            TextButton.icon(
+                              onPressed: () => _scanSerials(context),
+                              icon: const Icon(Icons.document_scanner, size: 14),
+                              label: const Text('Scan Continu', style: TextStyle(fontSize: 11)),
+                              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: Size.zero),
+                            ),
+                        ],
                       ),
+                      const SizedBox(height: 8),
+                      ...List.generate(widget.model.quantite, (idx) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            CircleAvatar(radius: 10, backgroundColor: Colors.grey.shade300, child: Text('${idx+1}', style: const TextStyle(fontSize: 9, color: Colors.black))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _serialControllers[idx],
+                                decoration: InputDecoration(
+                                  labelText: widget.model.article!.estSerialise ? 'N° de Série' : 'Désignation spécifique (optionnel)',
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.tag, size: 14),
+                                ),
+                                style: const TextStyle(fontSize: 12),
+                                onChanged: (val) {
+                                  widget.model.serials[idx] = val.isEmpty ? null : val;
+                                  widget.onUpdate();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
                     ],
                   ),
                 ),
@@ -716,13 +932,13 @@ class _LigneItemWidget extends StatelessWidget {
             children: [
               Expanded(
                 child: ArticleAutocomplete(
-                  initialValue: model.article,
+                  initialValue: widget.model.article,
                   onSelected: (a) {
-                    model.article = a;
-                    if (model.priceController.text.isEmpty || model.priceController.text == '0.0') {
-                      model.priceController.text = a.prixUnitaireMoyen.toString();
+                    widget.model.article = a;
+                    if (widget.model.priceController.text.isEmpty || widget.model.priceController.text == '0.0') {
+                      widget.model.priceController.text = a.prixUnitaireMoyen.toString();
                     }
-                    onUpdate();
+                    widget.onUpdate();
                   },
                 ),
               ),
@@ -740,12 +956,12 @@ class _LigneItemWidget extends StatelessWidget {
         Expanded(
           flex: 1,
           child: TextFormField(
-            controller: model.qtyController,
+            controller: widget.model.qtyController,
             decoration: const InputDecoration(labelText: 'Qté', isDense: true, contentPadding: EdgeInsets.all(10)),
             keyboardType: TextInputType.number,
             onChanged: (v) {
-              model.updateSerialsCount();
-              onUpdate();
+              widget.model.updateSerialsCount();
+              widget.onUpdate();
             },
           ),
         ),
@@ -753,10 +969,10 @@ class _LigneItemWidget extends StatelessWidget {
         Expanded(
           flex: 2,
           child: TextFormField(
-            controller: model.priceController,
+            controller: widget.model.priceController,
             decoration: const InputDecoration(labelText: 'P.U (DA)', isDense: true, contentPadding: EdgeInsets.all(10)),
             keyboardType: TextInputType.number,
-            onChanged: (_) => onUpdate(),
+            onChanged: (_) => widget.onUpdate(),
           ),
         ),
         const SizedBox(width: 12),
@@ -766,7 +982,7 @@ class _LigneItemWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               const Text('Total Ligne', style: TextStyle(fontSize: 9, color: Colors.grey)),
-              Text('${model.montant.toStringAsFixed(0)} DA', 
+              Text('${widget.model.montant.toStringAsFixed(0)} DA', 
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -777,7 +993,7 @@ class _LigneItemWidget extends StatelessWidget {
           padding: const EdgeInsets.only(left: 8),
           constraints: const BoxConstraints(),
           icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
-          onPressed: onDelete,
+          onPressed: widget.onDelete,
         ),
       ],
     );
@@ -793,13 +1009,13 @@ class _LigneItemWidget extends StatelessWidget {
                 children: [
                   Expanded(
                     child: ArticleAutocomplete(
-                      initialValue: model.article,
+                      initialValue: widget.model.article,
                       onSelected: (a) {
-                        model.article = a;
-                        if (model.priceController.text.isEmpty || model.priceController.text == '0.0') {
-                          model.priceController.text = a.prixUnitaireMoyen.toString();
+                        widget.model.article = a;
+                        if (widget.model.priceController.text.isEmpty || widget.model.priceController.text == '0.0') {
+                          widget.model.priceController.text = a.prixUnitaireMoyen.toString();
                         }
-                        onUpdate();
+                        widget.onUpdate();
                       },
                     ),
                   ),
@@ -813,7 +1029,7 @@ class _LigneItemWidget extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
-              onPressed: onDelete,
+              onPressed: widget.onDelete,
             ),
           ],
         ),
@@ -822,12 +1038,12 @@ class _LigneItemWidget extends StatelessWidget {
           children: [
             Expanded(
               child: TextFormField(
-                controller: model.qtyController,
+                controller: widget.model.qtyController,
                 decoration: const InputDecoration(labelText: 'Qté', isDense: true, contentPadding: EdgeInsets.all(10)),
                 keyboardType: TextInputType.number,
                 onChanged: (v) {
-                  model.updateSerialsCount();
-                  onUpdate();
+                  widget.model.updateSerialsCount();
+                  widget.onUpdate();
                 },
               ),
             ),
@@ -835,10 +1051,10 @@ class _LigneItemWidget extends StatelessWidget {
             Expanded(
               flex: 2,
               child: TextFormField(
-                controller: model.priceController,
+                controller: widget.model.priceController,
                 decoration: const InputDecoration(labelText: 'P.U (DA)', isDense: true, contentPadding: EdgeInsets.all(10)),
                 keyboardType: TextInputType.number,
-                onChanged: (_) => onUpdate(),
+                onChanged: (_) => widget.onUpdate(),
               ),
             ),
             const SizedBox(width: 12),
@@ -846,7 +1062,7 @@ class _LigneItemWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 const Text('Total', style: TextStyle(fontSize: 9, color: Colors.grey)),
-                Text('${model.montant.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                Text('${widget.model.montant.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               ],
             ),
           ],
@@ -863,17 +1079,20 @@ class _LigneItemWidget extends StatelessWidget {
   void _scanSerials(BuildContext context) async {
     final scanned = await showDialog<List<String>>(
       context: context,
-      builder: (_) => ContinuousScannerDialog(count: model.quantite),
+      builder: (_) => ContinuousScannerDialog(count: widget.model.quantite),
     );
     if (scanned != null) {
-      model.serials = List.generate(model.quantite, (i) => i < scanned.length ? scanned[i] : null);
-      onUpdate();
+      for (int i = 0; i < scanned.length && i < _serialControllers.length; i++) {
+        _serialControllers[i].text = scanned[i];
+        widget.model.serials[i] = scanned[i];
+      }
+      widget.onUpdate();
     }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN LISTE DES FACTURES
+// SCREEN LISTE DES RÉCEPTIONS (Factures + Bons de Commande)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class FacturesListScreen extends StatefulWidget {
@@ -897,97 +1116,29 @@ class _FacturesListScreenState extends State<FacturesListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<FactureProvider>();
-    final theme = Theme.of(context);
-    final fmt = DateFormat('dd/MM/yyyy');
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Factures & Réceptions'),
-      ),
-      body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : provider.factures.isEmpty
-              ? _EmptyFactures(onAdd: _openForm)
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: provider.factures.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final f = provider.factures[i];
-                    final fournisseur = ObjectBoxStore.instance.fournisseurs
-                        .query(FournisseurEntity_.uuid.equals(f.fournisseurUuid))
-                        .build()
-                        .findFirst();
-                    
-                    final bc = f.bcUuid != null 
-                        ? ObjectBoxStore.instance.bonsCommande
-                            .query(BonCommandeEntity_.uuid.equals(f.bcUuid!))
-                            .build()
-                            .findFirst()
-                        : null;
-
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: theme.colorScheme.primaryContainer,
-                          child: const Icon(Icons.receipt_long, size: 20),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Facture N° ${f.numeroFacture}',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (bc != null) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.blue.shade200),
-                                ),
-                                child: Text(
-                                  'BC: ${bc.numeroBc}',
-                                  style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        subtitle: Text(
-                          '${fournisseur?.raisonSociale ?? "Fournisseur inconnu"} • ${fmt.format(f.dateFacture)}',
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${f.montantTtc.toStringAsFixed(0)} DA',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            Text(
-                              f.numeroInterne,
-                              style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        onTap: () => _showDetails(context, f, bc),
-                      ),
-                    ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
-                  },
-                ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openForm,
-        icon: const Icon(Icons.add_shopping_cart),
-        label: const Text('Ajouter une facture'),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Réceptions & Achats'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.receipt_long), text: 'Factures / Réceptions'),
+              Tab(icon: Icon(Icons.shopping_cart), text: 'Bons de Commande'),
+            ],
+          ),
+        ),
+        body: const TabBarView(
+          children: [
+            _FactureSubList(),
+            _BonCommandeSubList(),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _openForm,
+          icon: const Icon(Icons.add_shopping_cart),
+          label: const Text('Réceptionner Facture'),
+        ),
       ),
     );
   }
@@ -999,11 +1150,127 @@ class _FacturesListScreenState extends State<FacturesListScreen> {
       builder: (_) => const FactureFormDialog(),
     );
   }
+}
 
-  void _showDetails(BuildContext context, FactureEntity f, BonCommandeEntity? bc) {
-    showDialog(
-      context: context,
-      builder: (_) => FactureDetailDialog(facture: f, bc: bc),
+class _FactureSubList extends StatelessWidget {
+  const _FactureSubList();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<FactureProvider>();
+    final theme = Theme.of(context);
+    final fmt = DateFormat('dd/MM/yyyy');
+
+    if (provider.isLoading) return const Center(child: CircularProgressIndicator());
+    if (provider.factures.isEmpty) return const _EmptyFactures();
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.factures.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final f = provider.factures[i];
+        final fournisseur = ObjectBoxStore.instance.fournisseurs
+            .query(FournisseurEntity_.uuid.equals(f.fournisseurUuid))
+            .build()
+            .findFirst();
+        
+        final bc = f.bcUuid != null 
+            ? ObjectBoxStore.instance.bonsCommande
+                .query(BonCommandeEntity_.uuid.equals(f.bcUuid!))
+                .build()
+                .findFirst()
+            : null;
+
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: const Icon(Icons.receipt_long, size: 20),
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Facture N° ${f.numeroFacture}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (bc != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Text(
+                      'BC: ${bc.numeroBc}',
+                      style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              '${fournisseur?.raisonSociale ?? "Fournisseur inconnu"} • ${fmt.format(f.dateFacture)}',
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${f.montantTtc.toStringAsFixed(0)} DA',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                Text(
+                  f.numeroInterne,
+                  style: theme.textTheme.labelSmall?.copyWith(color: Colors.grey),
+                ),
+              ],
+            ),
+            onTap: () => showDialog(context: context, builder: (_) => FactureDetailDialog(facture: f, bc: bc)),
+          ),
+        ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
+      },
+    );
+  }
+}
+
+class _BonCommandeSubList extends StatelessWidget {
+  const _BonCommandeSubList();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<BonCommandeProvider>();
+    final fmt = DateFormat('dd/MM/yyyy');
+
+    if (provider.isLoading) return const Center(child: CircularProgressIndicator());
+    if (provider.bons.isEmpty) return const Center(child: Text('Aucun bon de commande'));
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.bons.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final b = provider.bons[i];
+        final f = ObjectBoxStore.instance.fournisseurs.query(FournisseurEntity_.uuid.equals(b.fournisseurUuid)).build().findFirst();
+        
+        return Card(
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.shopping_cart)),
+            title: Text(b.numeroBc, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${f?.raisonSociale ?? "—"} • ${fmt.format(b.dateBc)}'),
+            trailing: Text('${b.montantTotal.toStringAsFixed(0)} DA', style: const TextStyle(fontWeight: FontWeight.bold)),
+            onTap: () {},
+          ),
+        );
+      },
     );
   }
 }
@@ -1034,7 +1301,7 @@ class FactureDetailDialog extends StatelessWidget {
 
     return Dialog(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 700, maxHeight: 800),
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 800),
         child: Column(
           children: [
             Container(
@@ -1049,9 +1316,21 @@ class FactureDetailDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Facture ${facture.numeroFacture}', style: theme.textTheme.titleLarge, overflow: TextOverflow.ellipsis),
-                        Text('Interne: ${facture.numeroInterne}'),
+                        Text('Interne: ${facture.numeroInterne} / BC: ${bc?.numeroBc ?? "N/A"}'),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Modifier la facture',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => FactureFormDialog(existing: facture),
+                      );
+                    },
                   ),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                 ],
@@ -1068,7 +1347,7 @@ class FactureDetailDialog extends StatelessWidget {
                     if (bc != null) _DetailRow('Bon de Commande', bc!.numeroBc),
                     _DetailRow('Statut', facture.statut.toUpperCase()),
                     const Divider(height: 32),
-                    Text('Articles réceptionnés', style: theme.textTheme.titleMedium),
+                    Text('Articles réceptionnés et inventoriés', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 12),
                     _buildLignesTable(theme, lignes),
                     const Divider(height: 32),
@@ -1101,19 +1380,19 @@ class FactureDetailDialog extends StatelessWidget {
   Widget _buildLignesTable(ThemeData theme, List<LigneFactureEntity> lignes) {
     return Table(
       columnWidths: const {
-        0: FlexColumnWidth(3),
+        0: FlexColumnWidth(4),
         1: FlexColumnWidth(1),
         2: FlexColumnWidth(1.5),
-        3: FlexColumnWidth(1.5),
+        3: FlexColumnWidth(2),
       },
       children: [
         TableRow(
           decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant),
           children: const [
-            Padding(padding: EdgeInsets.all(8), child: Text('Désig.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-            Padding(padding: EdgeInsets.all(8), child: Text('Qté', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-            Padding(padding: EdgeInsets.all(8), child: Text('P.U', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-            Padding(padding: EdgeInsets.all(8), child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+            Padding(padding: EdgeInsets.all(8), child: Text('Désignation / N° Inv.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            Padding(padding: EdgeInsets.all(8), child: Text('Qté', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            Padding(padding: EdgeInsets.all(8), child: Text('P.U', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
+            Padding(padding: EdgeInsets.all(8), child: Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
           ],
         ),
         ...lignes.map((l) {
@@ -1121,9 +1400,28 @@ class FactureDetailDialog extends StatelessWidget {
               .query(ArticleEntity_.uuid.equals(l.articleUuid))
               .build()
               .findFirst();
+          
+          final itemsInv = ObjectBoxStore.instance.articlesInventaire
+              .query(ArticleInventaireEntity_.ligneReceptionUuid.equals(l.uuid))
+              .build()
+              .find();
+
           return TableRow(
             children: [
-              Padding(padding: const EdgeInsets.all(8), child: Text(article?.designation ?? l.articleUuid, style: const TextStyle(fontSize: 12))),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(article?.designation ?? l.articleUuid, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    ...itemsInv.map((inv) => Text(
+                      '• ${inv.numeroInventaire}${inv.numeroSerieOrigine != null ? " (S/N: ${inv.numeroSerieOrigine})" : ""}',
+                      style: TextStyle(fontSize: 10, color: Colors.blue.shade800, fontFamily: 'monospace'),
+                    )),
+                  ],
+                ),
+              ),
               Padding(padding: const EdgeInsets.all(8), child: Text('${l.quantite}', style: const TextStyle(fontSize: 12))),
               Padding(padding: const EdgeInsets.all(8), child: Text(l.prixUnitaire.toStringAsFixed(0), style: const TextStyle(fontSize: 12))),
               Padding(padding: const EdgeInsets.all(8), child: Text(l.montantLigne.toStringAsFixed(0), style: const TextStyle(fontSize: 12))),
@@ -1155,8 +1453,7 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _EmptyFactures extends StatelessWidget {
-  final VoidCallback onAdd;
-  const _EmptyFactures({required this.onAdd});
+  const _EmptyFactures();
 
   @override
   Widget build(BuildContext context) {
@@ -1167,12 +1464,6 @@ class _EmptyFactures extends StatelessWidget {
           Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           const Text('Aucune facture enregistrée'),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('Réceptionner une facture'),
-          ),
         ],
       ),
     );

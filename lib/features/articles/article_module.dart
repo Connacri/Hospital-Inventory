@@ -17,6 +17,7 @@ import '../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
 import '../fournisseurs/fournisseur_module.dart';
 import '../inventaire/inventaire_module.dart';
+import '../../shared/widgets/app_toast.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REPOSITORIES
@@ -156,9 +157,10 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       ..prixUnitaireMoyen = prixUnitaireMoyen
       ..stockMinimum = stockMinimum
       ..estSerialise = estSerialise
+      ..stockActuel = 0
       ..actif = true;
 
-    return insert(entity);
+    return await insert(entity);
   }
 
   @override
@@ -193,12 +195,10 @@ class ArticleProvider extends ChangeNotifier {
 
   List<ArticleEntity> _articles = [];
   List<CategorieArticleEntity> _categories = [];
-  List<ArticleEntity> _searchResults = [];
   bool _isLoading = false;
 
   List<ArticleEntity> get articles => _articles;
   List<CategorieArticleEntity> get categories => _categories;
-  List<ArticleEntity> get searchResults => _searchResults;
   bool get isLoading => _isLoading;
 
   void loadAll() {
@@ -207,26 +207,6 @@ class ArticleProvider extends ChangeNotifier {
     _categories = _catRepo.getAll();
     _isLoading = false;
     notifyListeners();
-  }
-
-  void search(String q) {
-    _searchResults = _repo.search(q);
-    notifyListeners();
-  }
-
-  Future<CategorieArticleEntity> createCategorie({
-    required String libelle,
-    required String code,
-    required String type,
-  }) async {
-    final cat = CategorieArticleEntity()
-      ..libelle = libelle
-      ..code = code
-      ..type = type;
-    
-    final saved = await _catRepo.insert(cat);
-    loadAll();
-    return saved;
   }
 
   Future<ArticleEntity> create({
@@ -241,7 +221,7 @@ class ArticleProvider extends ChangeNotifier {
     int stockMinimum = 0,
     bool estSerialise = false,
   }) async {
-    final e = await _repo.create(
+    final a = await _repo.create(
       designation: designation,
       categorieUuid: categorieUuid,
       fournisseurUuid: fournisseurUuid,
@@ -254,280 +234,259 @@ class ArticleProvider extends ChangeNotifier {
       estSerialise: estSerialise,
     );
     loadAll();
-    return e;
+    return a;
   }
 
-  Future<void> update(ArticleEntity e) async {
-    await _repo.update(e);
+  Future<void> update(ArticleEntity a) async {
+    await _repo.update(a);
     loadAll();
   }
 
   Future<void> delete(String uuid) async {
-    await _repo.delete(uuid);
+    final a = _repo.getByUuid(uuid);
+    if (a != null) {
+      await _repo.delete(a.uuid);
+      loadAll();
+    }
+  }
+
+  List<ArticleEntity> search(String q) => _repo.search(q);
+
+  Future<CategorieArticleEntity> createCategorie(String code, String libelle, String type) async {
+    final cat = CategorieArticleEntity()
+      ..code = code
+      ..libelle = libelle
+      ..type = type;
+    final saved = await _catRepo.insert(cat);
+    loadAll();
+    return saved;
+  }
+
+  Future<void> updateCategorie(CategorieArticleEntity cat) async {
+    await _catRepo.update(cat);
     loadAll();
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN LISTE ARTICLES
+// WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
 
-class ArticlesListScreen extends StatefulWidget {
-  const ArticlesListScreen({super.key});
+class ArticleAutocomplete extends StatelessWidget {
+  final ArticleEntity? initialValue;
+  final ValueChanged<ArticleEntity> onSelected;
+
+  const ArticleAutocomplete({
+    super.key,
+    this.initialValue,
+    required this.onSelected,
+  });
 
   @override
-  State<ArticlesListScreen> createState() => _ArticlesListScreenState();
+  Widget build(BuildContext context) {
+    final articles = context.watch<ArticleProvider>().articles;
+
+    return Autocomplete<ArticleEntity>(
+      initialValue: initialValue != null 
+        ? TextEditingValue(text: initialValue!.designation) 
+        : null,
+      displayStringForOption: (a) => a.designation,
+      optionsBuilder: (textValue) {
+        if (textValue.text.isEmpty) return articles;
+        return articles.where((a) =>
+            a.designation.toLowerCase().contains(textValue.text.toLowerCase()) ||
+            a.codeArticle.toLowerCase().contains(textValue.text.toLowerCase()));
+      },
+      onSelected: onSelected,
+      fieldViewBuilder: (context, controller, focus, onFieldSubmitted) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focus,
+          decoration: const InputDecoration(
+            labelText: 'Sélectionner un article *',
+            prefixIcon: Icon(Icons.inventory_2_outlined),
+            hintText: 'Nom ou Code article...',
+            isDense: true,
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _ArticlesListScreenState extends State<ArticlesListScreen> {
-  final _searchCtrl = TextEditingController();
-  String? _filterCategorie;
+// ─────────────────────────────────────────────────────────────────────────────
+// SCREENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ArticleListScreen extends StatefulWidget {
+  const ArticleListScreen({super.key});
+  @override
+  State<ArticleListScreen> createState() => _ArticleListScreenState();
+}
+
+class _ArticleListScreenState extends State<ArticleListScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<ArticleEntity> _filtered = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        context.read<ArticleProvider>().loadAll();
-      }
+      context.read<ArticleProvider>().loadAll();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ArticleProvider>();
-    final theme = Theme.of(context);
-    
-    var list = _searchCtrl.text.isEmpty
-        ? provider.articles
-        : provider.searchResults;
-    if (_filterCategorie != null) {
-      list = list.where((a) => a.categorieUuid == _filterCategorie).toList();
-    }
-    final categoriesById = {for (final c in provider.categories) c.uuid: c};
+    final articles = _searchCtrl.text.isEmpty ? provider.articles : _filtered;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Articles / Référentiel'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _openForm(context),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Rechercher un article...',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: provider.search,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Filtre catégorie
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    value: _filterCategorie,
-                    decoration: const InputDecoration(
-                      labelText: 'Catégorie',
-                      prefixIcon: Icon(Icons.category_outlined),
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('Toutes'),
-                      ),
-                      ...provider.categories.map(
-                        (c) => DropdownMenuItem(
-                          value: c.uuid,
-                          child: Text(c.libelle, overflow: TextOverflow.ellipsis),
-                        ),
-                      ),
-                    ],
-                    onChanged: (v) => setState(() => _filterCategorie = v),
-                  ),
-                ),
-              ],
+        title: const Text('Catalogue Articles'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Rechercher un article...',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surface,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              onChanged: (v) {
+                setState(() {
+                  _filtered = provider.search(v);
+                });
+              },
             ),
           ),
-          Expanded(
-            child: list.isEmpty 
-              ? Center(child: Text('Aucun article trouvé', style: theme.textTheme.bodyLarge))
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 6),
-                  itemBuilder: (context, i) {
-                    final a = list[i];
-                    return _ArticleCard(
-                      article: a,
-                      categorie: categoriesById[a.categorieUuid],
-                      onTap: () => _openDetail(context, a),
-                      onEdit: () => _openForm(context, existing: a),
-                      onDelete: () => _delete(context, a),
-                    ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
-                  },
-                ),
-          ),
-        ],
+        ),
       ),
+      body: provider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : articles.isEmpty
+              ? _buildEmptyState()
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: articles.length,
+                  itemBuilder: (context, i) => _ArticleTile(article: articles[i]),
+                ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(context),
         icon: const Icon(Icons.add),
-        label: const Text('Nouvel article'),
+        label: const Text('Nouvel Article'),
       ),
     );
   }
 
-  void _openDetail(BuildContext context, ArticleEntity a) {
-    showDialog(
-      context: context,
-      builder: (_) => ArticleDetailDialog(article: a),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text('Aucun article trouvé', style: TextStyle(color: Colors.grey.shade600)),
+        ],
+      ),
     );
   }
 
-  void _openForm(BuildContext context, {ArticleEntity? existing}) {
+  void _openForm(BuildContext context, [ArticleEntity? existing]) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => ArticleFormDialog(existing: existing),
     );
   }
+}
 
-  Future<void> _delete(BuildContext context, ArticleEntity a) async {
-    final ok = await showDialog<bool>(
+class _ArticleTile extends StatelessWidget {
+  final ArticleEntity article;
+  const _ArticleTile({required this.article});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isLowStock = article.stockMinimum > 0 && article.stockActuel <= article.stockMinimum;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () => showDialog(context: context, builder: (_) => ArticleDetailDialog(article: article)),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
+                child: Icon(Icons.medication_outlined, color: theme.colorScheme.primary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(article.designation, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(article.codeArticle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontFamily: 'monospace')),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('${article.stockActuel} ${article.uniteMesure}', style: TextStyle(fontWeight: FontWeight.bold, color: isLowStock ? Colors.red : null)),
+                  if (isLowStock) const Text('STOCK BAS', style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton(
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                  const PopupMenuItem(value: 'delete', child: Text('Supprimer', style: TextStyle(color: Colors.red))),
+                ],
+                onSelected: (v) {
+                  if (v == 'edit') {
+                    showDialog(context: context, builder: (_) => ArticleFormDialog(existing: article));
+                  } else if (v == 'delete') {
+                    _confirmDelete(context);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Archiver cet article ?'),
-        content: Text('"${a.designation}" sera archivé.'),
+        title: const Text('Supprimer cet article ?'),
+        content: Text('Voulez-vous vraiment supprimer "${article.designation}" ?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Archiver'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(onPressed: () {
+            context.read<ArticleProvider>().delete(article.uuid);
+            Navigator.pop(ctx);
+          }, child: const Text('Supprimer')),
         ],
       ),
     );
-    if (ok == true && mounted) {
-      context.read<ArticleProvider>().delete(a.uuid);
-    }
   }
 }
 
-// ── Carte article ─────────────────────────────────────────────────────────
-
-class _ArticleCard extends StatelessWidget {
-  final ArticleEntity article;
-  final CategorieArticleEntity? categorie;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _ArticleCard({
-    required this.article,
-    this.categorie,
-    required this.onTap,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final a = article;
-    final theme = Theme.of(context);
-    final isAlerte = a.stockActuel <= a.stockMinimum && a.stockMinimum > 0;
-
-    return Card(
-      child: ListTile(
-        onTap: onTap,
-        leading: Icon(
-          _typeIcon(categorie?.type),
-          color: isAlerte ? theme.colorScheme.error : theme.colorScheme.primary,
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                a.designation,
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 4),
-            if (a.estSerialise)
-              _Badge(text: 'SÉRIALISÉ', color: theme.colorScheme.secondaryContainer),
-            if (isAlerte)
-              _Badge(text: 'ALERTE', color: theme.colorScheme.errorContainer, textColor: theme.colorScheme.error),
-          ],
-        ),
-        subtitle: Text(
-          '${a.codeArticle}  •  ${categorie?.libelle ?? "—"}  •  Stock: ${a.stockActuel} ${a.uniteMesure}',
-          style: theme.textTheme.bodySmall,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${a.prixUnitaireMoyen.toStringAsFixed(0)} DA',
-              style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: onEdit,
-            ),
-            IconButton(
-              icon: const Icon(Icons.archive_outlined, color: Colors.red),
-              onPressed: onDelete,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _typeIcon(String? type) => switch (type) {
-    'immobilisation' => Icons.chair_outlined,
-    'consommable' => Icons.inventory_2_outlined,
-    'equipement_medical' => Icons.medical_services_outlined,
-    _ => Icons.category_outlined,
-  };
-}
-
-class _Badge extends StatelessWidget {
-  final String text;
-  final Color color;
-  final Color? textColor;
-  const _Badge({required this.text, required this.color, this.textColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
-      child: Text(text, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: textColor)),
-    );
-  }
-}
-
-// ── Formulaire article ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// DIALOGS
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ArticleFormDialog extends StatefulWidget {
   final ArticleEntity? existing;
@@ -539,18 +498,18 @@ class ArticleFormDialog extends StatefulWidget {
 
 class _ArticleFormDialogState extends State<ArticleFormDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _designation;
-  late final TextEditingController _description;
-  late final TextEditingController _unite;
-  late final TextEditingController _gtin;
-  late final TextEditingController _stockMin;
-  late final TextEditingController _madeIn;
-  late final TextEditingController _prix;
-  late final TextEditingController _quantiteInitiale;
+  late TextEditingController _designation;
+  late TextEditingController _description;
+  late TextEditingController _madeIn;
+  late TextEditingController _unite;
+  late TextEditingController _gtin;
+  late TextEditingController _prix;
+  late TextEditingController _stockMin;
+  late TextEditingController _quantiteInitiale;
   
   String? _categorieUuid;
   String? _fournisseurUuid;
-  bool _estSerialise = false;
+  bool _estSerialise = true; // CHANGEMENT: Actif par défaut
   bool _isSaving = false;
 
   final List<TextEditingController> _serialControllers = [];
@@ -559,43 +518,52 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   @override
   void initState() {
     super.initState();
-    final a = widget.existing;
-    _designation = TextEditingController(text: a?.designation ?? '');
-    _description = TextEditingController(text: a?.description ?? '');
-    _unite = TextEditingController(text: a?.uniteMesure ?? 'unité');
-    _gtin = TextEditingController(text: a?.codeGtin ?? '');
-    _stockMin = TextEditingController(text: (a?.stockMinimum ?? 0).toString());
-    _madeIn = TextEditingController(text: a?.madeIn ?? '');
-    _prix = TextEditingController(text: (a?.prixUnitaireMoyen ?? 0).toString());
+    final e = widget.existing;
+    _designation = TextEditingController(text: e?.designation);
+    _description = TextEditingController(text: e?.description);
+    _madeIn = TextEditingController(text: e?.madeIn);
+    _unite = TextEditingController(text: e?.uniteMesure ?? 'unité');
+    _gtin = TextEditingController(text: e?.codeGtin);
+    _prix = TextEditingController(text: e?.prixUnitaireMoyen.toStringAsFixed(0));
+    _stockMin = TextEditingController(text: e?.stockMinimum.toString());
     _quantiteInitiale = TextEditingController(text: '0');
     
-    _categorieUuid = a?.categorieUuid;
-    _fournisseurUuid = a?.fournisseurUuid;
-    _estSerialise = a?.estSerialise ?? false;
-
-    _updateSerialControllers();
+    _categorieUuid = e?.categorieUuid;
+    _fournisseurUuid = e?.fournisseurUuid;
+    
+    // Si c'est un edit, on garde la valeur de l'objet, sinon c'est true par défaut
+    if (e != null) {
+      _estSerialise = e.estSerialise;
+    } else {
+      _estSerialise = true;
+    }
   }
 
   void _updateSerialControllers() {
-    final q = int.tryParse(_quantiteInitiale.text) ?? 0;
-    if (_serialControllers.length < q) {
-      while (_serialControllers.length < q) {
+    final count = int.tryParse(_quantiteInitiale.text) ?? 0;
+    if (count > _serialControllers.length) {
+      for (int i = _serialControllers.length; i < count; i++) {
         _serialControllers.add(TextEditingController());
       }
-    } else if (_serialControllers.length > q) {
-      while (_serialControllers.length > q) {
-        final last = _serialControllers.removeLast();
-        last.dispose();
+    } else if (count < _serialControllers.length) {
+      for (int i = _serialControllers.length - 1; i >= count; i--) {
+        _serialControllers[i].dispose();
+        _serialControllers.removeAt(i);
       }
     }
   }
 
   @override
   void dispose() {
-    for (final c in [_designation, _description, _unite, _gtin, _stockMin, _madeIn, _prix, _quantiteInitiale]) {
-      c.dispose();
-    }
-    for (final c in _serialControllers) {
+    _designation.dispose();
+    _description.dispose();
+    _madeIn.dispose();
+    _unite.dispose();
+    _gtin.dispose();
+    _prix.dispose();
+    _stockMin.dispose();
+    _quantiteInitiale.dispose();
+    for (var c in _serialControllers) {
       c.dispose();
     }
     super.dispose();
@@ -603,122 +571,97 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ArticleProvider>();
     final theme = Theme.of(context);
+    final provider = context.watch<ArticleProvider>();
     final isEdit = widget.existing != null;
+    final q = int.tryParse(_quantiteInitiale.text) ?? 0;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 700;
-        final q = int.tryParse(_quantiteInitiale.text) ?? 0;
-
-        return Dialog(
-          insetPadding: isMobile ? const EdgeInsets.all(10) : const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 900, maxHeight: MediaQuery.of(context).size.height * 0.9),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.inventory_2_outlined),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          isEdit ? 'Modifier article' : 'Nouvel article',
-                          style: theme.textTheme.titleLarge,
-                          overflow: TextOverflow.ellipsis,
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 900),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              color: theme.colorScheme.primaryContainer,
+              child: Row(
+                children: [
+                  Icon(isEdit ? Icons.edit_note : Icons.add_business),
+                  const SizedBox(width: 12),
+                  Text(isEdit ? 'Modifier Article' : 'Nouvel Article', style: theme.textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Colonne 1: Infos de base
+                    Expanded(
+                      flex: 3,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: _buildFormFields(provider, isEdit),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Form(
-                    key: _formKey,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: isMobile 
-                        ? _buildMobileLayout(provider, theme, isEdit, q) 
-                        : _buildDesktopLayout(provider, theme, isEdit, q),
                     ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Annuler'),
+                    const VerticalDivider(width: 1),
+                    // Colonne 2: Stock Initial / Séries (seulement à la création)
+                    if (!isEdit && q > 0)
+                      Expanded(
+                        flex: 2,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: _buildSerialSection(theme, q),
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton.icon(
-                        icon: _isSaving
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.save),
-                        label: Text(isEdit ? 'Modifier' : 'Enregistrer'),
-                        onPressed: _isSaving ? null : _save,
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        );
-      }
-    );
-  }
-
-  Widget _buildDesktopLayout(ArticleProvider provider, ThemeData theme, bool isEdit, int q) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 5,
-          child: Column(children: _buildFormFields(provider, theme, isEdit)),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: _isSaving ? null : _save,
+                    icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
+                    label: Text(isEdit ? 'Mettre à jour' : 'Enregistrer l\'article'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        if (!isEdit && q > 0) ...[
-          const SizedBox(width: 32),
-          Expanded(
-            flex: 4,
-            child: _buildSerialSection(theme, q),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
-  Widget _buildMobileLayout(ArticleProvider provider, ThemeData theme, bool isEdit, int q) {
-    return Column(
-      children: [
-        ..._buildFormFields(provider, theme, isEdit),
-        if (!isEdit && q > 0) ...[
-          const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Divider()),
-          _buildSerialSection(theme, q),
-        ],
-      ],
-    );
-  }
+  List<Widget> _buildFormFields(ArticleProvider provider, bool isEdit) {
+    final store = ObjectBoxStore.instance;
+    FournisseurEntity? initialFournisseur;
+    
+    // CORRECTION CRITIQUE: Forcer la recherche du fournisseur si l'UUID est présent
+    if (_fournisseurUuid != null && _fournisseurUuid!.isNotEmpty) {
+      initialFournisseur = store.fournisseurs
+          .query(FournisseurEntity_.uuid.equals(_fournisseurUuid!))
+          .build()
+          .findFirst();
+    }
 
-  List<Widget> _buildFormFields(ArticleProvider provider, ThemeData theme, bool isEdit) {
     return [
       TextFormField(
         controller: _designation,
+        autofocus: true,
         decoration: const InputDecoration(labelText: 'Désignation *'),
         validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
       ),
@@ -757,7 +700,8 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
       ),
       const SizedBox(height: 16),
       FournisseurAutocomplete(
-        initialValue: _fournisseurUuid != null ? context.read<FournisseurProvider>().fournisseurs.where((f) => f.uuid == _fournisseurUuid).firstOrNull : null,
+        key: ValueKey('fournisseur_$_fournisseurUuid'), // Forcer le rebuild si l'UUID change
+        initialValue: initialFournisseur,
         onSelected: (f) => setState(() => _fournisseurUuid = f.uuid),
       ),
       const SizedBox(height: 16),
@@ -886,7 +830,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         if (q > 0) {
           await invProvider.creerBatch(
             articleUuid: a.uuid,
-            ficheReceptionUuid: 'STOCK-INITIAL-${DateTime.now().year}',
+            ficheReceptionUuid: const Uuid().v4(), // UUID requis pour la sync Supabase
             ligneReceptionUuid: const Uuid().v4(),
             quantite: q,
             serials: _serials,
@@ -911,7 +855,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -1049,158 +993,586 @@ class _ContinuousScannerDialogState extends State<ContinuousScannerDialog> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-        FilledButton(onPressed: _scannedCodes.isEmpty ? null : () => Navigator.pop(context, _scannedCodes), child: const Text('Valider')),
+        FilledButton(onPressed: _scannedCodes.isEmpty ? null : () => Navigator.pop(context, _scannedCodes), child: const Text('Terminer')),
       ],
     );
   }
 }
 
-// ── Dialogue de création de catégorie ──
 
+
+// ─── Palette Médicale ────────────────────────────────────────────────────────
+class _MedPalette {
+  static const primary = Color(0xFF0B6E7A);      // Teal médical profond
+  static const primaryContainer = Color(0xFFDFF4F7);
+  static const surface = Color(0xFFF8FCFD);
+  static const onSurface = Color(0xFF0D1C1E);
+  static const subtle = Color(0xFF5C8A90);
+  static const divider = Color(0xFFCAE8ED);
+  static const errorRed = Color(0xFFB3261E);
+  static const success = Color(0xFF1B7F4A);
+}
+
+// ─── Modèle Type ─────────────────────────────────────────────────────────────
+class _CatType {
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color accent;
+  const _CatType({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.accent,
+  });
+}
+
+const _catTypes = [
+  _CatType(
+    value: 'immobilisation',
+    label: 'Immobilisation',
+    icon: Icons.account_balance_outlined,
+    accent: Color(0xFF1565C0),
+  ),
+  _CatType(
+    value: 'consommable',
+    label: 'Consommable',
+    icon: Icons.inventory_2_outlined,
+    accent: Color(0xFF2E7D32),
+  ),
+  _CatType(
+    value: 'equipement_medical',
+    label: 'Éq. Médical',
+    icon: Icons.medical_services_outlined,
+    accent: Color(0xFF6A1B9A),
+  ),
+];
+
+// ─── Dialog ───────────────────────────────────────────────────────────────────
 class CategorieFormDialog extends StatefulWidget {
-  const CategorieFormDialog({super.key});
+  final CategorieArticleEntity? existing;
+  const CategorieFormDialog({super.key, this.existing});
 
   @override
   State<CategorieFormDialog> createState() => _CategorieFormDialogState();
 }
 
-class _CategorieFormDialogState extends State<CategorieFormDialog> {
+class _CategorieFormDialogState extends State<CategorieFormDialog>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _libelle = TextEditingController();
-  final _code = TextEditingController();
-  String _type = 'consommable';
-  bool _isSaving = false;
+  late TextEditingController _code;
+  late TextEditingController _libelle;
+  late String _type;
+  bool _loading = false;
+
+  late AnimationController _animCtrl;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _fadeAnim;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _code = TextEditingController(text: widget.existing?.code);
+    _libelle = TextEditingController(text: widget.existing?.libelle);
+    _type = widget.existing?.type ?? 'immobilisation';
+
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _scaleAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutBack);
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _animCtrl.forward();
+  }
 
   @override
   void dispose() {
-    _libelle.dispose();
     _code.dispose();
+    _libelle.dispose();
+    _animCtrl.dispose();
     super.dispose();
+  }
+
+  _CatType get _selectedType =>
+      _catTypes.firstWhere((t) => t.value == _type);
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      if (_isEdit) {
+        final cat = widget.existing!;
+        cat.code = _code.text.trim().toUpperCase();
+        cat.libelle = _libelle.text.trim();
+        cat.type = _type;
+        await context.read<ArticleProvider>().updateCategorie(cat);
+        if (mounted) Navigator.pop(context, cat);
+      } else {
+        final cat = await context.read<ArticleProvider>().createCategorie(
+          _code.text.trim().toUpperCase(),
+          _libelle.text.trim(),
+          _type,
+        );
+        if (mounted) Navigator.pop(context, cat);
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Nouvelle catégorie'),
-      content: Form(
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: ScaleTransition(
+        scale: _scaleAnim,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Adaptation responsive : compact (mobile/tablette) ↔ large (desktop)
+            final isCompact = constraints.maxWidth < 520;
+            final dialogWidth = isCompact
+                ? constraints.maxWidth * 0.95
+                : 520.0;
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: EdgeInsets.symmetric(
+                horizontal: isCompact ? 12 : 40,
+                vertical: 24,
+              ),
+              child: Container(
+                width: dialogWidth,
+                decoration: BoxDecoration(
+                  color: _MedPalette.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _MedPalette.divider, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _MedPalette.primary.withOpacity(0.12),
+                      blurRadius: 32,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(),
+                    _buildBody(isCompact),
+                    _buildFooter(),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _MedPalette.primary,
+            _MedPalette.primary.withBlue(130),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _isEdit ? Icons.edit_outlined : Icons.add_circle_outline,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isEdit ? 'Modifier la catégorie' : 'Nouvelle catégorie',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Gestion des catégories d\'articles',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Badge établissement
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.local_hospital_rounded,
+                    color: Colors.white.withOpacity(0.9), size: 13),
+                const SizedBox(width: 4),
+                Text(
+                  'CHU',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Body ────────────────────────────────────────────────────────────────────
+  Widget _buildBody(bool isCompact) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, isCompact ? 12 : 16),
+      child: Form(
         key: _formKey,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextFormField(
-              controller: _libelle,
-              decoration: const InputDecoration(labelText: 'Libellé *'),
-              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _code,
-              decoration: const InputDecoration(labelText: 'Code (ex: MOB, MED) *'),
-              validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: _type,
-              decoration: const InputDecoration(labelText: 'Type'),
-              items: const [
-                DropdownMenuItem(value: 'consommable', child: Text('Consommable')),
-                DropdownMenuItem(value: 'immobilisation', child: Text('Immobilisation')),
-                DropdownMenuItem(value: 'equipement_medical', child: Text('Équipement médical')),
+            // Champs code + libellé : inline sur desktop, stacked sur mobile
+            isCompact
+                ? Column(children: [_buildCodeField(), const SizedBox(height: 14), _buildLibelleField()])
+                : Row(
+              children: [
+                SizedBox(width: 130, child: _buildCodeField()),
+                const SizedBox(width: 14),
+                Expanded(child: _buildLibelleField()),
               ],
-              onChanged: (v) => setState(() => _type = v!),
             ),
+
+            const SizedBox(height: 22),
+
+            // Sélecteur de type — visuel & iconifié
+            _buildTypeSelector(),
           ],
         ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-        FilledButton(
-          onPressed: _isSaving ? null : _save,
-          child: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Créer'),
+    );
+  }
+
+  Widget _buildCodeField() {
+    return TextFormField(
+      controller: _code,
+      textCapitalization: TextCapitalization.characters,
+      maxLength: 8,
+      style: const TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
+        color: _MedPalette.onSurface,
+        letterSpacing: 1.5,
+      ),
+      decoration: _inputDeco(
+        label: 'Code',
+        hint: 'MED, IT…',
+        icon: Icons.qr_code_2_rounded,
+        counterText: '',
+      ),
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) return 'Requis';
+        if (v.trim().length < 2) return 'Min. 2 car.';
+        return null;
+      },
+    );
+  }
+
+  Widget _buildLibelleField() {
+    return TextFormField(
+      controller: _libelle,
+      style: const TextStyle(fontSize: 14, color: _MedPalette.onSurface),
+      decoration: _inputDeco(
+        label: 'Libellé',
+        hint: 'Nom complet de la catégorie',
+        icon: Icons.label_outline_rounded,
+      ),
+      validator: (v) =>
+      (v == null || v.trim().isEmpty) ? 'Requis' : null,
+    );
+  }
+
+  InputDecoration _inputDeco({
+    required String label,
+    required String hint,
+    required IconData icon,
+    String? counterText,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      counterText: counterText,
+      prefixIcon: Icon(icon, color: _MedPalette.subtle, size: 20),
+      labelStyle: const TextStyle(color: _MedPalette.subtle, fontSize: 13),
+      hintStyle: TextStyle(
+          color: _MedPalette.subtle.withOpacity(0.5), fontSize: 13),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding:
+      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _MedPalette.divider, width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _MedPalette.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _MedPalette.errorRed, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _MedPalette.errorRed, width: 2),
+      ),
+    );
+  }
+
+  Widget _buildTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.category_outlined,
+                size: 15, color: _MedPalette.subtle),
+            const SizedBox(width: 6),
+            Text(
+              'Type d\'article',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _MedPalette.subtle,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Sur très petits écrans → scrollable, sinon distribué
+            final tileWidth = (constraints.maxWidth - 16) / 3;
+            final tooNarrow = tileWidth < 95;
+
+            final tiles = _catTypes.map((t) {
+              final selected = _type == t.value;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: tooNarrow ? 110 : null,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? t.accent.withOpacity(0.10)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: selected
+                        ? t.accent
+                        : _MedPalette.divider,
+                    width: selected ? 2 : 1.5,
+                  ),
+                  boxShadow: selected
+                      ? [
+                    BoxShadow(
+                      color: t.accent.withOpacity(0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
+                  ]
+                      : [],
+                ),
+                child: InkWell(
+                  onTap: () => setState(() => _type = t.value),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        t.icon,
+                        color: selected
+                            ? t.accent
+                            : _MedPalette.subtle,
+                        size: 24,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        t.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                          color: selected
+                              ? t.accent
+                              : _MedPalette.subtle,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: selected ? 20 : 0,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: t.accent,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList();
+
+            return tooNarrow
+                ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: tiles
+                    .map((t) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: t,
+                ))
+                    .toList(),
+              ),
+            )
+                : Row(
+              children: [
+                for (int i = 0; i < tiles.length; i++) ...[
+                  Expanded(child: tiles[i]),
+                  if (i < tiles.length - 1) const SizedBox(width: 8),
+                ]
+              ],
+            );
+          },
         ),
       ],
     );
   }
 
-  void _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isSaving = true);
-    try {
-      final cat = await context.read<ArticleProvider>().createCategorie(
-        libelle: _libelle.text.trim(),
-        code: _code.text.trim().toUpperCase(),
-        type: _type,
-      );
-      if (mounted) Navigator.pop(context, cat);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-}
-
-// ── Autocomplete réutilisable ────────────────────────────────────────────────
-
-class ArticleAutocomplete extends StatelessWidget {
-  final void Function(ArticleEntity) onSelected;
-  final ArticleEntity? initialValue;
-  final String? label;
-
-  const ArticleAutocomplete({
-    super.key,
-    required this.onSelected,
-    this.initialValue,
-    this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final repo = ArticleRepository();
-    final theme = Theme.of(context);
-    
-    return Autocomplete<ArticleEntity>(
-      initialValue: TextEditingValue(text: initialValue?.designation ?? ''),
-      displayStringForOption: (a) => '${a.codeArticle} — ${a.designation}',
-      optionsBuilder: (value) {
-        if (value.text.isEmpty) return repo.getAll().take(10);
-        return repo.search(value.text);
-      },
-      onSelected: onSelected,
-      fieldViewBuilder: (ctx, ctrl, focusNode, _) => TextFormField(
-        controller: ctrl,
-        focusNode: focusNode,
-        decoration: InputDecoration(
-          labelText: label ?? 'Article *',
-          prefixIcon: const Icon(Icons.inventory_2_outlined),
+  // ── Footer ──────────────────────────────────────────────────────────────────
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+        const BorderRadius.vertical(bottom: Radius.circular(20)),
+        border: Border(
+          top: BorderSide(color: _MedPalette.divider, width: 1),
         ),
-        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
       ),
-      optionsViewBuilder: (ctx, onSelected, options) => Align(
-        alignment: Alignment.topLeft,
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            width: 450,
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              itemCount: options.length,
-              itemBuilder: (ctx, i) {
-                final a = options.elementAt(i);
-                return ListTile(
-                  title: Text(a.designation, style: theme.textTheme.bodyLarge),
-                  subtitle: Text(
-                    '${a.codeArticle} • Stock: ${a.stockActuel} ${a.uniteMesure}',
-                    style: theme.textTheme.bodySmall,
+      child: Row(
+        children: [
+          // Info type sélectionné
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _selectedType.accent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_selectedType.icon,
+                    size: 13, color: _selectedType.accent),
+                const SizedBox(width: 5),
+                Text(
+                  _selectedType.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _selectedType.accent,
                   ),
-                  onTap: () => onSelected(a),
-                );
-              },
+                ),
+              ],
             ),
           ),
-        ),
+          const Spacer(),
+          // Annuler
+          TextButton(
+            onPressed:
+            _loading ? null : () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: _MedPalette.subtle,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Annuler',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 8),
+          // Confirmer
+          FilledButton.icon(
+            onPressed: _loading ? null : _submit,
+            style: FilledButton.styleFrom(
+              backgroundColor: _MedPalette.primary,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: _loading
+                ? const SizedBox(
+              width: 15,
+              height: 15,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : Icon(
+              _isEdit
+                  ? Icons.check_circle_outline
+                  : Icons.add_circle_outline,
+              size: 18,
+            ),
+            label: Text(
+              _isEdit ? 'Mettre à jour' : 'Créer la catégorie',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+          ),
+        ],
       ),
     );
   }

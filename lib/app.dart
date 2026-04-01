@@ -142,6 +142,13 @@ class _RootNavigatorState extends State<_RootNavigator> {
     final settings = context.watch<SettingsProvider>();
     final auth = context.watch<AuthProvider>();
 
+    // Attendre que l'auth soit prête avant de rediriger
+    if (!auth.isInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (auth.isLoggedIn) return const MainShell();
     if (settings.isProvisioned) return const AuthScreenWidget(key: ValueKey('auth_login'));
 
