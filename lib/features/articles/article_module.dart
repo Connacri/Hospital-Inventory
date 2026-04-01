@@ -611,6 +611,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   late TextEditingController _gtin;
   late TextEditingController _prix;
   late TextEditingController _stockMin;
+  late TextEditingController _stockActuel;
   late TextEditingController _quantiteInitiale;
   
   String? _categorieUuid;
@@ -632,6 +633,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     _gtin = TextEditingController(text: e?.codeGtin);
     _prix = TextEditingController(text: e?.prixUnitaireMoyen.toStringAsFixed(0));
     _stockMin = TextEditingController(text: e?.stockMinimum.toString());
+    _stockActuel = TextEditingController(text: e?.stockActuel.toString() ?? '0');
     _quantiteInitiale = TextEditingController(text: '0');
     
     _categorieUuid = e?.categorieUuid;
@@ -668,6 +670,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     _gtin.dispose();
     _prix.dispose();
     _stockMin.dispose();
+    _stockActuel.dispose();
     _quantiteInitiale.dispose();
     for (var c in _serialControllers) {
       c.dispose();
@@ -685,7 +688,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 700;
-        final dialogWidth = isMobile ? constraints.maxWidth * 0.95 : 850.0;
+        final dialogWidth = isMobile ? constraints.maxWidth   : 850.0;
         final dialogHeight = constraints.maxHeight * 0.9;
 
         return Dialog(
@@ -817,6 +820,15 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                                   keyboardType: TextInputType.number,
                                 ),
                                 TextFormField(
+                                  controller: _stockActuel,
+                                  decoration: InputDecoration(
+                                    labelText: 'Stock Actuel', 
+                                    prefixIcon: const Icon(Icons.inventory_outlined),
+                                    helperText: isEdit ? 'Attention: Modification manuelle' : null,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                ),
+                                TextFormField(
                                   controller: _stockMin,
                                   decoration: const InputDecoration(labelText: 'Seuil d\'alerte stock', prefixIcon: Icon(Icons.warning_amber_rounded)),
                                   keyboardType: TextInputType.number,
@@ -858,10 +870,10 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
                     children: [
                       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
                       const SizedBox(width: 12),
-                      FilledButton.icon(
+                      IconButton(
                         onPressed: _isSaving ? null : _save,
                         icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
-                        label: Text(isEdit ? 'Enregistrer les modifications' : 'Créer l\'article'),
+                        //label: Text(isEdit ? 'Enregistrer les modifications' : 'Créer l\'article'),
                       ),
                     ],
                   ),
@@ -1041,6 +1053,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
           ..uniteMesure = _unite.text.trim().isNotEmpty ? _unite.text.trim() : 'unité'
           ..codeGtin = _gtin.text.trim().isNotEmpty ? _gtin.text.trim() : null
           ..stockMinimum = int.tryParse(_stockMin.text) ?? 0
+          ..stockActuel = int.tryParse(_stockActuel.text) ?? a.stockActuel
           ..estSerialise = _estSerialise;
 
         // Mise à jour fournisseur principal (compatibilité)

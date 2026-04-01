@@ -51,6 +51,7 @@ class DashboardProvider extends ChangeNotifier {
   int alertesMaintenance = 0;
 
   List<ServiceStats> topServices = [];
+  List<ServiceHopitalEntity> allServices = [];
   List<FournisseurStats> topFournisseurs = [];
   List<ArticleInventaireEntity> maintenanceProchaineList = [];
 
@@ -60,6 +61,12 @@ class DashboardProvider extends ChangeNotifier {
   void refresh() {
     _isLoading = true;
     notifyListeners();
+
+    // Services
+    allServices = _store.services
+        .query(ServiceHopitalEntity_.isDeleted.equals(false))
+        .build()
+        .find();
 
     // Inventaire
     final invAll = _store.articlesInventaire
@@ -90,13 +97,13 @@ class DashboardProvider extends ChangeNotifier {
         invAll
             .where(
               (a) =>
-                  a.dateProchaineMaintenace != null &&
-                  a.dateProchaineMaintenace!.isBefore(limite30j),
+                  a.dateProchaineMaintenance != null &&
+                  a.dateProchaineMaintenance!.isBefore(limite30j),
             )
             .toList()
           ..sort(
-            (a, b) => a.dateProchaineMaintenace!.compareTo(
-              b.dateProchaineMaintenace!,
+            (a, b) => a.dateProchaineMaintenance!.compareTo(
+              b.dateProchaineMaintenance!,
             ),
           );
     alertesMaintenance = maintenanceProchaineList.length;
@@ -328,6 +335,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 24),
 
+                  Text(
+                    'Services Hospitaliers',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Grille des services avec grandes icônes
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = constraints.maxWidth > 800 ? 6 : (constraints.maxWidth > 500 ? 4 : 3);
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.9,
+                        ),
+                        itemCount: dash.allServices.length,
+                        itemBuilder: (context, i) {
+                          final s = dash.allServices[i];
+                          return _ServiceIconCard(
+                            service: s,
+                            onTap: () => _showServiceDetail(context, s),
+                          );
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 24),
+
                   // Contenu en colonnes/lignes adaptatif
                   LayoutBuilder(
                     builder: (context, constraints) {
@@ -360,6 +400,210 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  void _showServiceDetail(BuildContext context, ServiceHopitalEntity service) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ServiceDetailDialog(service: service),
+    );
+  }
+}
+
+// ── Widgets dashboard ─────────────────────────────────────────────────────
+
+class _ServiceIconCard extends StatelessWidget {
+  final ServiceHopitalEntity service;
+  final VoidCallback onTap;
+
+  const _ServiceIconCard({required this.service, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = Color((service.libelle.hashCode * 0xFFFFFF).toInt()).withValues(alpha: 1.0);
+    // On génère une couleur pastel basée sur le nom
+    final pastelColor = HSLColor.fromColor(color).withSaturation(0.4).withLightness(0.85).toColor();
+    final darkColor = HSLColor.fromColor(color).withSaturation(0.6).withLightness(0.3).toColor();
+
+    return Card(
+      elevation: 0,
+      color: pastelColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: darkColor.withValues(alpha: 0.1)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.local_hospital_rounded, color: darkColor, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                service.libelle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: darkColor,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (service.code.isNotEmpty)
+                Text(
+                  service.code,
+                  style: TextStyle(fontSize: 9, color: darkColor.withValues(alpha: 0.7)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ).animate().fadeIn().scale(delay: const Duration(milliseconds: 50));
+  }
+}
+
+class _ServiceDetailDialog extends StatelessWidget {
+  final ServiceHopitalEntity service;
+
+  const _ServiceDetailDialog({required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = ObjectBoxStore.instance;
+    
+    // Fetch materials for this service
+    final items = store.articlesInventaire
+        .query(ArticleInventaireEntity_.serviceUuid.equals(service.uuid)
+            .and(ArticleInventaireEntity_.isDeleted.equals(false)))
+        .build()
+        .find();
+
+    final affectes = items.where((a) => a.statut == 'affecte').toList();
+    final reformes = items.where((a) => a.statut == 'reforme').toList();
+    final perdus = items.where((a) => a.statut == 'perdu').toList();
+
+    return DefaultTabController(
+      length: 3,
+      child: AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.local_hospital, color: Colors.blue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(service.libelle),
+                  Text(
+                    '${service.batiment ?? ""} - ${service.etage ?? ""}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        contentPadding: EdgeInsets.zero,
+        content: SizedBox(
+          width: 600,
+          height: 500,
+          child: Column(
+            children: [
+              TabBar(
+                labelColor: Theme.of(context).primaryColor,
+                unselectedLabelColor: Colors.grey,
+                indicatorSize: TabBarIndicatorSize.label,
+                tabs: [
+                  Tab(text: 'Affectés (${affectes.length})'),
+                  Tab(text: 'Réformés (${reformes.length})'),
+                  Tab(text: 'Perdus (${perdus.length})'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _MaterialList(items: affectes, emptyMsg: 'Aucun matériel affecté'),
+                    _MaterialList(items: reformes, emptyMsg: 'Aucun matériel réformé', color: Colors.orange),
+                    _MaterialList(items: perdus, emptyMsg: 'Aucun matériel perdu', color: Colors.red),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fermer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialList extends StatelessWidget {
+  final List<ArticleInventaireEntity> items;
+  final String emptyMsg;
+  final Color color;
+
+  const _MaterialList({
+    required this.items,
+    required this.emptyMsg,
+    this.color = Colors.blue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          emptyMsg,
+          style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    final store = ObjectBoxStore.instance;
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const Divider(),
+      itemBuilder: (ctx, i) {
+        final item = items[i];
+        final articleRef = store.articles
+            .query(ArticleEntity_.uuid.equals(item.articleUuid))
+            .build()
+            .findFirst();
+
+        return ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.inventory_2_outlined, color: color, size: 16),
+          ),
+          title: Text(
+            articleRef?.designation ?? item.numeroInventaire,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text('Inv: ${item.numeroInventaire}${item.numeroSerieOrigine != null ? " | SN: ${item.numeroSerieOrigine}" : ""}'),
+          trailing: Text(
+            item.etatPhysique ?? 'Bon état',
+            style: const TextStyle(fontSize: 10),
+          ),
+        );
+      },
     );
   }
 }
@@ -612,7 +856,7 @@ class _MaintenanceCard extends StatelessWidget {
                     .query(ArticleEntity_.uuid.equals(a.articleUuid))
                     .build()
                     .findFirst();
-                final isUrgent = a.dateProchaineMaintenace!.isBefore(
+                final isUrgent = a.dateProchaineMaintenance!.isBefore(
                   DateTime.now().add(const Duration(days: 7)),
                 );
 
@@ -635,7 +879,7 @@ class _MaintenanceCard extends StatelessWidget {
                     style: const TextStyle(fontSize: 10),
                   ),
                   trailing: Text(
-                    fmt.format(a.dateProchaineMaintenace!),
+                    fmt.format(a.dateProchaineMaintenance!),
                     style: TextStyle(
                       color: isUrgent ? Colors.red : Colors.orange,
                       fontSize: 11,

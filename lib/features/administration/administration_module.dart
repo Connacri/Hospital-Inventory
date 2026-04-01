@@ -125,16 +125,16 @@ class AdminProvider extends ChangeNotifier {
 
   // ── SERVICES ──────────────────────────────
 
+  void filterServices(String query) {
+    _servicesFilter = query.toLowerCase().trim();
+    _resetServices();
+  }
+
   void _resetServices() {
     _servicesOffset = 0;
     _servicesHasMore = true;
     _services = [];
     _fetchNextServicesChunk();
-  }
-
-  void filterServices(String query) {
-    _servicesFilter = query.toLowerCase().trim();
-    _resetServices();
   }
 
   void loadMoreServices() {
@@ -274,6 +274,59 @@ class AdminProvider extends ChangeNotifier {
 
     _isLoading = false;
     loadAll();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTOCOMPLETE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ServiceAutocomplete extends StatelessWidget {
+  final ServiceHopitalEntity? initialValue;
+  final ValueChanged<ServiceHopitalEntity> onSelected;
+  final String? label;
+
+  const ServiceAutocomplete({
+    super.key,
+    this.initialValue,
+    required this.onSelected,
+    this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Note: Utilise AdminProvider pour les services
+    final services = context.watch<AdminProvider>().services;
+
+    return Autocomplete<ServiceHopitalEntity>(
+      initialValue: initialValue != null 
+        ? TextEditingValue(text: initialValue!.libelle) 
+        : null,
+      displayStringForOption: (s) => s.libelle,
+      optionsBuilder: (textValue) {
+        if (textValue.text.isEmpty) return services;
+        return services.where((s) =>
+            s.libelle.toLowerCase().contains(textValue.text.toLowerCase()) ||
+            s.code.toLowerCase().contains(textValue.text.toLowerCase()));
+      },
+      onSelected: onSelected,
+      fieldViewBuilder: (context, controller, focus, onFieldSubmitted) {
+        if (controller.text.isEmpty && initialValue != null) {
+          controller.text = initialValue!.libelle;
+        }
+        return TextFormField(
+          controller: controller,
+          focusNode: focus,
+          decoration: InputDecoration(
+            labelText: label ?? 'Service Hospitalier *',
+            prefixIcon: const Icon(Icons.local_hospital_outlined),
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+            hintText: 'Rechercher un service...',
+          ),
+          validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+        );
+      },
+    );
   }
 }
 

@@ -439,7 +439,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
         final isMobile = constraints.maxWidth < 800;
 
         return Dialog(
-          insetPadding: isMobile ? const EdgeInsets.all(10) : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+          insetPadding: isMobile ? const EdgeInsets.all(5) : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: 1100, maxHeight: MediaQuery.of(context).size.height * 0.95),
             child: Column(
@@ -474,7 +474,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                     child: CustomScrollView(
                       slivers: [
                         SliverPadding(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(12),
                           sliver: SliverToBoxAdapter(
                             child: Column(
                               children: [
@@ -518,7 +518,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                         ),
 
                         SliverPadding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           sliver: SliverList.separated(
                             itemCount: _lignes.length,
                             separatorBuilder: (_, __) => const Divider(height: 1),

@@ -7,6 +7,7 @@ import '../../features/administration/administration_module.dart';
 import '../../features/administration/supabase_config/supabase_config_screen.dart';
 import '../../features/articles/article_module.dart';
 import '../../features/dashboard/dashboard_screen.dart';
+import '../../features/dotation/dotation_module.dart';
 import '../../features/fournisseurs/fournisseur_module.dart';
 import '../../features/inventaire/inventaire_module.dart';
 import '../../features/reception/reception_module.dart';
@@ -24,6 +25,7 @@ class _MainShellState extends State<MainShell> {
   final List<Widget> _screens = [
     const DashboardScreen(),
     const InventaireListScreen(),
+    const BonDotationListScreen(),
     const FacturesListScreen(),
     const ArticleListScreen(),
     const FournisseursListScreen(),
@@ -33,6 +35,7 @@ class _MainShellState extends State<MainShell> {
   final List<Map<String, dynamic>> _menuItems = [
     {'icon': Icons.dashboard_outlined, 'selectedIcon': Icons.dashboard, 'label': 'Tableau de bord'},
     {'icon': Icons.inventory_2_outlined, 'selectedIcon': Icons.inventory_2, 'label': 'Inventaire Physique'},
+    {'icon': Icons.assignment_ind_outlined, 'selectedIcon': Icons.assignment_ind, 'label': 'Bons de Dotation'},
     {'icon': Icons.receipt_long_outlined, 'selectedIcon': Icons.receipt_long, 'label': 'Réceptions & Achats'},
     {'icon': Icons.category_outlined, 'selectedIcon': Icons.category, 'label': 'Articles'},
     {'icon': Icons.business_outlined, 'selectedIcon': Icons.business, 'label': 'Fournisseurs'},

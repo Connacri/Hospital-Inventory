@@ -845,7 +845,7 @@ class ArticleInventaireEntity {
   DateTime? dateDerniereMaintenance;
 
   @Property(type: PropertyType.date)
-  DateTime? dateProchaineMaintenace;
+  DateTime? dateProchaineMaintenance;
 
   String? observations;
   String createdByUuid = '';
@@ -878,7 +878,7 @@ class ArticleInventaireEntity {
     'valeur_nette_comptable': valeurNetteComptable,
     'date_mise_service': dateMiseService?.toIso8601String(),
     'date_derniere_maintenance': dateDerniereMaintenance?.toIso8601String(),
-    'date_prochaine_maintenance': dateProchaineMaintenace?.toIso8601String(),
+    'date_prochaine_maintenance': dateProchaineMaintenance?.toIso8601String(),
     'observations': observations,
     'created_by_uuid': createdByUuid,
     'is_deleted': isDeleted,
@@ -893,7 +893,8 @@ class ArticleInventaireEntity {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Entity()
-class BonDotationEntity {
+class BonDotationEntity
+{
   @Id()
   int id = 0;
 

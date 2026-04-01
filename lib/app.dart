@@ -13,6 +13,7 @@ import 'core/sync/sync_engine.dart';
 import 'features/administration/administration_module.dart';
 import 'features/articles/article_module.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'features/dotation/dotation_module.dart';
 import 'features/fournisseurs/fournisseur_module.dart';
 import 'features/inventaire/inventaire_module.dart';
 import 'features/reception/reception_module.dart';
@@ -48,6 +49,7 @@ class HopitalInventaireApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => InventaireProvider()),
         ChangeNotifierProvider(create: (_) => BonCommandeProvider()),
         ChangeNotifierProvider(create: (_) => FactureProvider()),
+        ChangeNotifierProvider(create: (_) => BonDotationProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: MaterialApp(

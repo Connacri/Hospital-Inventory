@@ -64,7 +64,7 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
           ArticleInventaireEntity_.isDeleted
               .equals(false)
               .and(
-                ArticleInventaireEntity_.dateProchaineMaintenace.lessOrEqual(
+                ArticleInventaireEntity_.dateProchaineMaintenance.lessOrEqual(
                   limite.millisecondsSinceEpoch,
                 ),
               ),
@@ -462,12 +462,90 @@ class _ArticleInventaireTile extends StatelessWidget {
     final srv = a.serviceUuid != null ? store.services.query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!)).build().findFirst() : null;
 
     return Card(
-      child: ListTile(
-        leading: _StatutBadge(statut: a.statut),
-        title: Text(a.numeroInventaire, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        subtitle: Text('${art?.designation ?? "Article inconnu"} • ${srv?.libelle ?? "EN STOCK"}'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => showDialog(context: context, builder: (_) => ArticleInventaireDetailDialog(article: a)),
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.05),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => showDialog(
+          context: context,
+          builder: (_) => ArticleInventaireDetailDialog(article: a),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Badge statut (plus visible)
+              _StatutBadge(statut: a.statut),
+
+              const SizedBox(width: 12),
+
+              // Contenu principal
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Numéro inventaire (style technique)
+                    Text(
+                      a.numeroInventaire,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    // Désignation (important)
+                    Text(
+                      art?.designation ?? "Article inconnu",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // Service / localisation
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            srv?.libelle ?? "EN STOCK",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Action
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: Colors.grey,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -485,109 +563,216 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final store = ObjectBoxStore.instance;
-    final art = store.articles.query(ArticleEntity_.uuid.equals(article.articleUuid)).build().findFirst();
-    final mvts = store.historique.query(HistoriqueMouvementEntity_.articleInventaireUuid.equals(article.uuid)).order(HistoriqueMouvementEntity_.createdAt, flags: Order.descending).build().find();
 
-    return DefaultTabController(
-      length: 3,
-      child: Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                color: theme.colorScheme.primaryContainer,
-                child: Row(
-                  children: [
-                    const Icon(Icons.qr_code_2, size: 32),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(article.numeroInventaire, style: theme.textTheme.headlineSmall?.copyWith(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-                          Text(art?.designation ?? 'Article inconnu', style: theme.textTheme.bodyMedium),
-                        ],
-                      ),
+    final art = store.articles
+        .query(ArticleEntity_.uuid.equals(article.articleUuid))
+        .build()
+        .findFirst();
+
+    final mvts = store.historique
+        .query(HistoriqueMouvementEntity_.articleInventaireUuid.equals(article.uuid))
+        .order(HistoriqueMouvementEntity_.createdAt, flags: Order.descending)
+        .build()
+        .find();
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+
+          return ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 800),
+            child: DefaultTabController(
+              length: 3,
+              child: Column(
+                children: [
+                  _Header(context, article, art),
+                   _StyledTabBar(),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildInfoTab(context, article, art, isMobile),
+                        _buildHistoryTab(mvts),
+                        _buildActionsTab(context, article, store),
+                      ],
                     ),
-                    _StatutBadge(statut: article.statut),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                  ],
-                ),
-              ),
-              const TabBar(
-                tabs: [
-                  Tab(icon: Icon(Icons.info_outline), text: 'Détails'),
-                  Tab(icon: Icon(Icons.history), text: 'Historique'),
-                  Tab(icon: Icon(Icons.settings_suggest), text: 'Actions'),
+                  ),
                 ],
               ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _buildInfoTab(context, article, art),
-                    _buildHistoryTab(mvts, store),
-                    _buildActionsTab(context, article, store),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildInfoTab(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art) {
-    final fmt = DateFormat('dd/MM/yyyy');
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+  // ================= HEADER =================
+  Widget _Header(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.primary.withOpacity(0.1),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+
+          // CircleAvatar(
+          //   radius: 26,
+          //   backgroundColor: theme.colorScheme.primary,
+          //   child: const Icon(Icons.medical_services, color: Colors.white),
+          // ),
+          const SizedBox(width: 16),
+
           Expanded(
-            flex: 2,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _InfoRow('Identifiant Unique', a.uuid),
-                _InfoRow('Numéro Série', a.numeroSerieOrigine ?? 'N/A'),
-                _InfoRow('État Physique', a.etatPhysique.toUpperCase()),
-                _InfoRow('Mise en service', a.dateMiseService != null ? fmt.format(a.dateMiseService!) : '—'),
-                _InfoRow('Valeur d\'achat', '${a.valeurAcquisition?.toStringAsFixed(2) ?? "0"} DA'),
-                _InfoRow('VNC', '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA'),
-                _InfoRow('Localisation', a.localisationPrecise ?? 'Non définie'),
+                _StatutBadge(statut: a.statut),
+               FittedBox(
+                      child: Text(
+                        a.numeroInventaire,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+
+                Text(
+                  art?.designation ?? 'Article inconnu',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey.shade700,
+                    fontSize: 13
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 24),
-          Expanded(
-            child: Column(
-              children: [
-                QrImageView(data: a.qrCodeInterne, size: 180),
-                const SizedBox(height: 8),
-                const Text('CODE QR INTERNE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                const SizedBox(height: 16),
-                FilledButton.icon(onPressed: () {}, icon: const Icon(Icons.print), label: const Text('Étiquette')),
-              ],
-            ),
+
+
+
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHistoryTab(List<HistoriqueMouvementEntity> mvts, ObjectBoxStore store) {
-    if (mvts.isEmpty) return const Center(child: Text('Aucun historique pour cet article'));
-    return ListView.builder(
+  // ================= TAB BAR =================
+  Widget _StyledTabBar() {
+    return const TabBar(
+      indicatorWeight: 3,
+      tabs: [
+        Tab(icon: Icon(Icons.info_outline), text: 'Détails'),
+        Tab(icon: Icon(Icons.history), text: 'Historique'),
+        Tab(icon: Icon(Icons.settings), text: 'Actions'),
+      ],
+    );
+  }
+
+  // ================= INFO =================
+  Widget _buildInfoTab(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art, bool isMobile) {
+    final fmt = DateFormat('dd/MM/yyyy');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: isMobile
+          ? Column(
+        children: [
+          _InfoCard(a, fmt),
+          const SizedBox(height: 16),
+          _QrCard(a),
+        ],
+      )
+          : Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _InfoCard(a, fmt)),
+          const SizedBox(width: 20),
+          _QrCard(a),
+        ],
+      ),
+    );
+  }
+
+  Widget _InfoCard(ArticleInventaireEntity a, DateFormat fmt) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _InfoRow('ID Unique', a.uuid),
+            _InfoRow('Numéro Série', a.numeroSerieOrigine ?? 'N/A'),
+            _InfoRow('État', a.etatPhysique.toUpperCase()),
+            _InfoRow('Mise en service', a.dateMiseService != null ? fmt.format(a.dateMiseService!) : '—'),
+            _InfoRow('Valeur', '${a.valeurAcquisition?.toStringAsFixed(2) ?? "0"} DA'),
+            _InfoRow('VNC', '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA'),
+            _InfoRow('Localisation', a.localisationPrecise ?? 'Non définie'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _QrCard(ArticleInventaireEntity a) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            QrImageView(data: a.qrCodeInterne, size: 160),
+            const SizedBox(height: 8),
+            const Text(
+              'IDENTIFIANT SCANNABLE',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.print),
+              label: const Text('Imprimer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= HISTORY =================
+  Widget _buildHistoryTab(List<HistoriqueMouvementEntity> mvts) {
+    if (mvts.isEmpty) {
+      return const Center(child: Text('Aucun historique'));
+    }
+
+    return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: mvts.length,
+      separatorBuilder: (_, __) => const Divider(),
       itemBuilder: (context, i) {
         final m = mvts[i];
+
         return ListTile(
-          dense: true,
-          leading: Icon(_mvtIcon(m.typeMouvement), color: Colors.blue),
-          title: Text(m.typeMouvement.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+          leading: CircleAvatar(
+            backgroundColor: Colors.blue.withOpacity(0.1),
+            child: Icon(_mvtIcon(m.typeMouvement), color: Colors.blue),
+          ),
+          title: Text(
+            m.typeMouvement.toUpperCase(),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(m.createdAt)),
           trailing: Text(m.statutApres ?? ''),
         );
@@ -595,18 +780,20 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
     );
   }
 
+  // ================= ACTIONS =================
   Widget _buildActionsTab(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       children: [
-        _ActionBtn(label: 'Affecter à un service', icon: Icons.person_add, color: Colors.green, onTap: () => _showTransferDialog(context, a, store)),
-        _ActionBtn(label: 'Envoyer en Maintenance', icon: Icons.build, color: Colors.orange, onTap: () => _quickStatus(context, a, 'en_maintenance')),
-        _ActionBtn(label: 'Déclarer Perdu/Volé', icon: Icons.report_problem, color: Colors.red, onTap: () => _quickStatus(context, a, 'perdu_vole')),
-        _ActionBtn(label: 'Réformer (Archiver)', icon: Icons.archive, color: Colors.grey, onTap: () => _quickStatus(context, a, 'reforme')),
+        _ActionBtn(label: 'Affecter', icon: Icons.person_add, color: Colors.green, onTap: () => _showTransferDialog(context, a, store)),
+        _ActionBtn(label: 'Maintenance', icon: Icons.build, color: Colors.orange, onTap: () => _quickStatus(context, a, 'en_maintenance')),
+        _ActionBtn(label: 'Perdu / Volé', icon: Icons.report, color: Colors.red, onTap: () => _quickStatus(context, a, 'perdu_vole')),
+        _ActionBtn(label: 'Réformer', icon: Icons.archive, color: Colors.grey, onTap: () => _quickStatus(context, a, 'reforme')),
       ],
     );
   }
 
+  // ================= LOGIC =================
   void _quickStatus(BuildContext context, ArticleInventaireEntity a, String status) {
     final user = context.read<AuthProvider>().currentUser;
     context.read<InventaireProvider>().updateStatut(a, status, user?.uuid ?? '');
@@ -615,20 +802,28 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
 
   void _showTransferDialog(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
     final services = store.services.getAll();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Transférer l\'article'),
+        title: const Text('Transfert vers service'),
         content: SizedBox(
-          width: 300,
+          width: 320,
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: services.length,
-            itemBuilder: (c, i) => ListTile(
+            itemBuilder: (_, i) => ListTile(
               title: Text(services[i].libelle),
               onTap: () {
                 final user = context.read<AuthProvider>().currentUser;
-                context.read<InventaireProvider>().updateStatut(a, 'affecte', user?.uuid ?? '', serviceUuid: services[i].uuid);
+
+                context.read<InventaireProvider>().updateStatut(
+                  a,
+                  'affecte',
+                  user?.uuid ?? '',
+                  serviceUuid: services[i].uuid,
+                );
+
                 Navigator.pop(ctx);
                 Navigator.pop(context);
               },
@@ -639,7 +834,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
     );
   }
 
-  IconData _mvtIcon(String type) => switch(type) {
+  IconData _mvtIcon(String type) => switch (type) {
     'entree' => Icons.login,
     'affectation' => Icons.person_add,
     'transfert' => Icons.swap_horiz,

@@ -1,0 +1,9 @@
+🚀 IA Release 1.0.0+13 (01/04/2026 15:15)
+
+CHANGELOG :
+- UI : Thème Playfair Display expert, contrastes et tailles augmentées.
+- UX : Navigation adaptative (PC/Mobile) via LayoutBuilder.
+- Auth : Système sécurisé avec appairage QR Code (Provisioning).
+- Admin : Gestion complète Utilisateurs, Services et Catégories.
+- Sync : Intégration cloud Supabase avec résolution de conflits.
+- Fix : Optimisation des filtres ObjectBox pour les alertes stock.
