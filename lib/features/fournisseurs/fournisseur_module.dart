@@ -657,9 +657,10 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
     setState(() => _isSaving = true);
 
     final provider = context.read<FournisseurProvider>();
+    FournisseurEntity? entity;
 
     if (widget.existing == null) {
-      await provider.create(
+      entity = await provider.create(
         raisonSociale: _raisonSociale.text.trim(),
         rc: _rc.text.trim().isNotEmpty ? _rc.text.trim() : null,
         nif: _nif.text.trim().isNotEmpty ? _nif.text.trim() : null,
@@ -693,10 +694,11 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
             ? _observations.text.trim()
             : null;
       await provider.update(f);
+      entity = f;
     }
 
     setState(() => _isSaving = false);
-    if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context, entity); // RETOURNE L'OBJET CRÉÉ/MODIFIÉ
   }
 }
 

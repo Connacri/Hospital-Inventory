@@ -123,6 +123,12 @@ class BonCommandeProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
+  Future<BonCommandeEntity> create(BonCommandeEntity b) async {
+    final saved = await _repo.insert(b);
+    loadAll();
+    return saved;
+  }
 }
 
 class FactureProvider extends ChangeNotifier {
@@ -304,7 +310,7 @@ class FactureProvider extends ChangeNotifier {
 
 class BonCommandeAutocomplete extends StatelessWidget {
   final BonCommandeEntity? initialValue;
-  final ValueChanged<BonCommandeEntity> onSelected;
+  final ValueChanged<BonCommandeEntity?> onSelected;
 
   const BonCommandeAutocomplete({
     super.key,
@@ -328,13 +334,22 @@ class BonCommandeAutocomplete extends StatelessWidget {
       },
       onSelected: onSelected,
       fieldViewBuilder: (context, controller, focus, onFieldSubmitted) {
+        if (initialValue != null && controller.text.isEmpty) {
+          controller.text = initialValue!.numeroBc;
+        }
         return TextFormField(
           controller: controller,
           focusNode: focus,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Lier à un Bon de Commande (BC)',
-            prefixIcon: Icon(Icons.shopping_cart_outlined),
+            prefixIcon: const Icon(Icons.shopping_cart_outlined),
             hintText: 'Rechercher un BC...',
+            suffixIcon: controller.text.isNotEmpty 
+              ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () {
+                  controller.clear();
+                  onSelected(null);
+                }) 
+              : null,
           ),
         );
       },
@@ -484,19 +499,31 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                                   _buildDesktopHeader(fmt),
                                 
                                 const SizedBox(height: 16),
-                                BonCommandeAutocomplete(
-                                  initialValue: _selectedBC,
-                                  onSelected: (b) {
-                                    setState(() {
-                                      _selectedBC = b;
-                                      if (_selectedFournisseur?.uuid != b.fournisseurUuid) {
-                                        _selectedFournisseur = ObjectBoxStore.instance.fournisseurs
-                                            .query(FournisseurEntity_.uuid.equals(b.fournisseurUuid))
-                                            .build()
-                                            .findFirst();
-                                      }
-                                    });
-                                  },
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: BonCommandeAutocomplete(
+                                        initialValue: _selectedBC,
+                                        onSelected: (b) {
+                                          setState(() {
+                                            _selectedBC = b;
+                                            if (b != null && _selectedFournisseur?.uuid != b.fournisseurUuid) {
+                                              _selectedFournisseur = ObjectBoxStore.instance.fournisseurs
+                                                  .query(FournisseurEntity_.uuid.equals(b.fournisseurUuid))
+                                                  .build()
+                                                  .findFirst();
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_shopping_cart_outlined, color: Colors.blue),
+                                      onPressed: _creerBonCommande,
+                                      tooltip: 'Nouveau Bon de Commande',
+                                    ),
+                                  ],
                                 ),
 
                                 const SizedBox(height: 24),
@@ -526,6 +553,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
                               model: _lignes[i],
                               onDelete: () => _removeLigne(i),
                               onUpdate: () => setState(() {}),
+                              selectedFournisseurUuid: _selectedFournisseur?.uuid,
                             ),
                           ),
                         ),
@@ -628,6 +656,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
           decoration: const InputDecoration(
             labelText: 'N° Facture *',
             prefixIcon: Icon(Icons.tag),
+            isDense: true,
           ),
           validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
         ),
@@ -638,6 +667,7 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
             decoration: const InputDecoration(
               labelText: 'Date Facture',
               prefixIcon: Icon(Icons.calendar_today),
+              isDense: true,
             ),
             child: Text(fmt.format(_dateFacture)),
           ),
@@ -724,8 +754,26 @@ class _FactureFormDialogState extends State<FactureFormDialog> {
   }
 
   void _creerFournisseur() async {
-    await showDialog(context: context, builder: (_) => const FournisseurFormDialog());
-    if (mounted) context.read<FournisseurProvider>().loadAll();
+    final res = await showDialog<FournisseurEntity>(context: context, builder: (_) => const FournisseurFormDialog());
+    if (res != null) {
+      setState(() => _selectedFournisseur = res);
+      if (mounted) context.read<FournisseurProvider>().loadAll();
+    }
+  }
+
+  void _creerBonCommande() async {
+    if (_selectedFournisseur == null) {
+      AppToast.show(context, 'Sélectionnez un fournisseur d\'abord', isError: true);
+      return;
+    }
+    final res = await showDialog<BonCommandeEntity>(
+      context: context, 
+      builder: (_) => _BonDotationFormDialog(fournisseur: _selectedFournisseur!)
+    );
+    if (res != null) {
+      setState(() => _selectedBC = res);
+      if (mounted) context.read<BonCommandeProvider>().loadAll();
+    }
   }
 
   Future<void> _save() async {
@@ -798,11 +846,13 @@ class _LigneItemWidget extends StatefulWidget {
   final _LigneFormModel model;
   final VoidCallback onDelete;
   final VoidCallback onUpdate;
+  final String? selectedFournisseurUuid;
 
   const _LigneItemWidget({
     required this.model,
     required this.onDelete,
     required this.onUpdate,
+    this.selectedFournisseurUuid,
   });
 
   @override
@@ -1072,8 +1122,18 @@ class _LigneItemWidgetState extends State<_LigneItemWidget> {
   }
 
   void _creerArticle(BuildContext context) async {
-    await showDialog(context: context, builder: (_) => const ArticleFormDialog());
-    if (context.mounted) context.read<ArticleProvider>().loadAll();
+    final res = await showDialog<ArticleEntity>(
+      context: context, 
+      builder: (_) => ArticleFormDialog(preselectedFournisseurUuid: widget.selectedFournisseurUuid)
+    );
+    if (res != null) {
+      setState(() {
+        widget.model.article = res;
+        widget.model.priceController.text = res.prixUnitaireMoyen.toStringAsFixed(0);
+      });
+      widget.onUpdate();
+      if (context.mounted) context.read<ArticleProvider>().loadAll();
+    }
   }
 
   void _scanSerials(BuildContext context) async {
@@ -1088,6 +1148,56 @@ class _LigneItemWidgetState extends State<_LigneItemWidget> {
       }
       widget.onUpdate();
     }
+  }
+}
+
+// ── Petit dialogue pour créer un BC à la volée ──
+class _BonDotationFormDialog extends StatefulWidget {
+  final FournisseurEntity fournisseur;
+  const _BonDotationFormDialog({required this.fournisseur});
+  @override State<_BonDotationFormDialog> createState() => _BonDotationFormDialogState();
+}
+
+class _BonDotationFormDialogState extends State<_BonDotationFormDialog> {
+  final _numBc = TextEditingController();
+  DateTime _dateBc = DateTime.now();
+
+  @override Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nouveau Bon de Commande'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('Fournisseur: ${widget.fournisseur.raisonSociale}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        TextFormField(controller: _numBc, decoration: const InputDecoration(labelText: 'N° BC *')),
+        const SizedBox(height: 16),
+        InkWell(
+          onTap: () async {
+            final d = await showDatePicker(context: context, initialDate: _dateBc, firstDate: DateTime(2024), lastDate: DateTime.now());
+            if (d != null) setState(() => _dateBc = d);
+          },
+          child: InputDecorator(decoration: const InputDecoration(labelText: 'Date BC'), child: Text(DateFormat('dd/MM/yyyy').format(_dateBc))),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        FilledButton(onPressed: _save, child: const Text('Créer et sélectionner')),
+      ],
+    );
+  }
+
+  void _save() async {
+    if (_numBc.text.isEmpty) return;
+    final auth = context.read<AuthProvider>();
+    final bc = BonCommandeEntity()
+      ..uuid = const Uuid().v4()
+      ..numeroBc = _numBc.text.trim()
+      ..fournisseurUuid = widget.fournisseur.uuid
+      ..dateBc = _dateBc
+      ..statut = 'valide'
+      ..createdByUuid = auth.currentUser?.uuid ?? '';
+    
+    final saved = await context.read<BonCommandeProvider>().create(bc);
+    if (mounted) Navigator.pop(context, saved);
   }
 }
 

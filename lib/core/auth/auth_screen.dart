@@ -33,12 +33,12 @@ class _AuthScreenWidgetState extends State<AuthScreenWidget> {
     return Scaffold(
       appBar: widget.onBack != null
           ? AppBar(
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBack,
-              ),
-              backgroundColor: Colors.transparent,
-            )
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: widget.onBack,
+        ),
+        backgroundColor: Colors.transparent,
+      )
           : null,
       backgroundColor: theme.colorScheme.surface,
       body: Center(
@@ -110,7 +110,7 @@ class _AuthScreenWidgetState extends State<AuthScreenWidget> {
                       ),
                       textInputAction: TextInputAction.done,
                       validator: (v) =>
-                          v == null || v.isEmpty ? 'Mot de passe requis' : null,
+                      v == null || v.isEmpty ? 'Mot de passe requis' : null,
                       onFieldSubmitted: (_) => _handleLogin(),
                     ).animate().fadeIn(delay: 400.ms).slideX(begin: -0.1),
                     const SizedBox(height: 24),
@@ -160,13 +160,13 @@ class _AuthScreenWidgetState extends State<AuthScreenWidget> {
                         ),
                         child: auth.isLoading
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                             : const Text('SE CONNECTER'),
                       ),
                     ).animate().fadeIn(delay: 600.ms),

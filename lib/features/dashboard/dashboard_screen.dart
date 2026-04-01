@@ -6,12 +6,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../objectbox.g.dart' hide SyncState;
+import '../articles/article_module.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELS
@@ -229,11 +231,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       dash.alertesStock > 0)
                     _AlertesBanner(dash: dash).animate().fadeIn(),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  Text(
-                    'Inventaire',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  // SECTION: ACTIONS RAPIDES (UX INTELLIGENT)
+                  Row(
+                    children: [
+                      const Icon(Icons.bolt, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Actions rapides',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _QuickActionBtn(
+                          label: 'Scanner QR',
+                          icon: Icons.qr_code_scanner,
+                          color: Colors.blue,
+                          onTap: () => _handleQuickScan(context),
+                        ),
+                        _QuickActionBtn(
+                          label: 'Nouvel article',
+                          icon: Icons.add_box_outlined,
+                          color: Colors.green,
+                          onTap: () => _handleNewArticle(context),
+                        ),
+                        _QuickActionBtn(
+                          label: 'Faire Inventaire',
+                          icon: Icons.playlist_add_check,
+                          color: Colors.orange,
+                          onTap: () => _handleInventory(context),
+                        ),
+                        _QuickActionBtn(
+                          label: 'Rapports PDF',
+                          icon: Icons.picture_as_pdf_outlined,
+                          color: Colors.red,
+                          onTap: () => _handleReports(context),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  Row(
+                    children: [
+                      const Icon(Icons.analytics_outlined, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'État de l\'inventaire',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   
@@ -289,6 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     },
                   ),
+
 
                   const SizedBox(height: 24),
 
@@ -407,6 +462,135 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => _ServiceDetailDialog(service: service),
+    );
+  }
+
+  void _handleQuickScan(BuildContext context) async {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const _QuickScannerDialog(),
+    );
+
+    if (code != null) {
+      final store = ObjectBoxStore.instance;
+      // Chercher par QR interne ou Numéro d'inventaire
+      var invItem = store.articlesInventaire
+          .query(ArticleInventaireEntity_.qrCodeInterne.equals(code))
+          .build()
+          .findFirst();
+
+      invItem ??= store.articlesInventaire
+          .query(ArticleInventaireEntity_.numeroInventaire.equals(code))
+          .build()
+          .findFirst();
+
+      if (invItem != null) {
+        final article = store.articles
+            .query(ArticleEntity_.uuid.equals(invItem.articleUuid))
+            .build()
+            .findFirst();
+        if (article != null) {
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (_) => ArticleDetailDialog(article: article),
+            );
+          }
+          return;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Aucun article trouvé pour le code: $code'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  void _handleNewArticle(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const ArticleFormDialog(),
+    ).then((_) {
+      if (mounted) context.read<DashboardProvider>().refresh();
+    });
+  }
+
+  void _handleInventory(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Module Inventaire Physique...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _handleReports(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rapports & Exports'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.picture_as_pdf, color: Colors.red),
+              title: Text('Inventaire complet (PDF)'),
+            ),
+            ListTile(
+              leading: Icon(Icons.table_chart, color: Colors.green),
+              title: Text('État du stock (Excel)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer')),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIALOG DE SCAN RAPIDE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QuickScannerDialog extends StatelessWidget {
+  const _QuickScannerDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Scanner un article'),
+      content: SizedBox(
+        width: 300,
+        height: 300,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: MobileScanner(
+            onDetect: (capture) {
+              final List<Barcode> barcodes = capture.barcodes;
+              if (barcodes.isNotEmpty) {
+                final code = barcodes.first.rawValue;
+                if (code != null) {
+                  Navigator.pop(context, code);
+                }
+              }
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+      ],
     );
   }
 }
@@ -699,50 +883,169 @@ class _KpiCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final int index;
 
   const _KpiCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.index = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
           const Spacer(),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: color,
+                fontFamily: 'Inter',
               ),
             ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
-    ).animate().fadeIn().scale(begin: const Offset(0.95, 0.95));
+    ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1, end: 0);
+  }
+}
+
+// ─── NOUVEAU : BARRE D'ACTIONS RAPIDES ───
+
+class _QuickActionsBar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _QuickActionBtn(
+            label: 'Scanner QR',
+            icon: Icons.qr_code_scanner,
+            color: Colors.blue,
+            onTap: () {
+              // Navigation gérée par le MainShell via Provider ou autre
+              // Pour démo: 
+            },
+          ),
+          _QuickActionBtn(
+            label: 'Nouvel article',
+            icon: Icons.add_circle_outline,
+            color: Colors.green,
+            onTap: () {
+              // Ouvrir formulaire article
+            },
+          ),
+          _QuickActionBtn(
+            label: 'Dotation Rapide',
+            icon: Icons.assignment_ind_outlined,
+            color: Colors.orange,
+            onTap: () {},
+          ),
+          _QuickActionBtn(
+            label: 'Rapport PDF',
+            icon: Icons.picture_as_pdf_outlined,
+            color: Colors.red,
+            onTap: () {},
+          ),
+          _QuickActionBtn(
+            label: 'Sync Supabase',
+            icon: Icons.cloud_sync_outlined,
+            color: Colors.indigo,
+            onTap: () => context.read<SyncEngine>().sync(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionBtn({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
