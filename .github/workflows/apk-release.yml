@@ -39,14 +39,17 @@ jobs:
         run: |
           git fetch --tags
           TAG=$(git tag --sort=-v:refname | head -n 1)
+          echo "Latest tag: $TAG"
           if [ -z "$TAG" ]; then
-            echo "NEW_TAG=v1.0.0" >> $GITHUB_ENV
+            echo "NEW_TAG=v1.0.0+1" >> $GITHUB_ENV
           else
-            VERSION=${TAG#v}
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-            PATCH=$((PATCH+1))
-            echo "NEW_TAG=v$MAJOR.$MINOR.$PATCH" >> $GITHUB_ENV
-
+            # Extraire la partie build après '+'
+            BUILD=$(echo $TAG | awk -F+ '{print $2}')
+            BUILD=$((BUILD+1))
+            BASE=$(echo $TAG | awk -F+ '{print $1}')
+            echo "NEW_TAG=${BASE}+${BUILD}" >> $GITHUB_ENV
+            echo "New tag: $NEW_TAG"
+          fi
       # 6️⃣ Build APK release
       - name: Build APK
         run: flutter build apk --release
