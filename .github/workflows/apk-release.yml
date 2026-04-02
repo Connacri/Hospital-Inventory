@@ -9,14 +9,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout du code
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2️⃣ Setup Flutter version exacte
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'
+          flutter-version: '3.38.5'
+          channel: stable
 
+      # 3️⃣ Cache dépendances Flutter & Gradle
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -25,9 +29,11 @@ jobs:
             ~/.gradle/caches
           key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
 
+      # 4️⃣ Installer uniquement les dépendances manquantes ou mises à jour
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      # 5️⃣ Détecter la dernière release et incrémenter le patch
       - name: Get latest tag
         id: tag
         run: |
@@ -41,19 +47,23 @@ jobs:
             PATCH=$((PATCH+1))
             echo "NEW_TAG=v$MAJOR.$MINOR.$PATCH" >> $GITHUB_ENV
 
+      # 6️⃣ Build APK release
       - name: Build APK
         run: flutter build apk --release
 
+      # 7️⃣ Installer qrencode pour générer le QR code
       - name: Install QR tool
         run: sudo apt-get update && sudo apt-get install -y qrencode
 
-      - name: Generate QR code for APK
+      # 8️⃣ Générer QR code et préparer APK
+      - name: Generate QR code and move APK
         run: |
           mkdir -p output
           RELEASE_URL="https://github.com/Connacri/Hospital-Inventory/releases/latest/download/app-${{ env.NEW_TAG }}.apk"
           qrencode -o output/qr-${{ env.NEW_TAG }}.png "$RELEASE_URL"
           cp build/app/outputs/flutter-apk/app-release.apk output/app-${{ env.NEW_TAG }}.apk
 
+      # 9️⃣ Créer Release GitHub avec APK + QR code
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
