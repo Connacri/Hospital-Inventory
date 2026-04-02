@@ -1,5 +1,6 @@
 name: Build APK & Auto Release with QR
-
+permissions:
+  contents: write   # permet de créer des releases et d’uploader des fichiers
 on:
   push:
     branches: [ master ]
