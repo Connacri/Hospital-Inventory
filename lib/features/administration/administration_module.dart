@@ -155,7 +155,7 @@ class AdminProvider extends ChangeNotifier {
         categoriesCount: 50,
         articlesCount: 1000,
         servicesCount: 50,
-        inventoryCount: 2000,
+        inventoryCount: 2000, usersCount: 2,
       );
     } finally {
       _isLoading = false;
@@ -173,6 +173,13 @@ class AdminProvider extends ChangeNotifier {
     store.fournisseurs.removeAll();
     store.services.removeAll();
     store.categories.removeAll();
+    store.affectations.removeAll();
+    store.articlesFournisseurs.removeAll();
+    store.fichesReception.removeAll();
+    store.lignesReception.removeAll();
+    store.bonsDotation.removeAll();
+    store.bonsCommande.removeAll();
+
     _isLoading = false;
     loadAll();
   }

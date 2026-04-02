@@ -323,9 +323,7 @@ class BonCommandeAutocomplete extends StatelessWidget {
     final bons = context.watch<BonCommandeProvider>().bons;
 
     return Autocomplete<BonCommandeEntity>(
-      initialValue: initialValue != null 
-        ? TextEditingValue(text: initialValue!.numeroBc) 
-        : null,
+      initialValue: TextEditingValue(text: initialValue != null ? initialValue!.numeroBc : ''),
       displayStringForOption: (b) => '${b.numeroBc} (${DateFormat('dd/MM/yy').format(b.dateBc)})',
       optionsBuilder: (textValue) {
         if (textValue.text.isEmpty) return bons;

@@ -705,7 +705,7 @@ class _FournisseurFormDialogState extends State<FournisseurFormDialog> {
 // ── Widget autocomplétion réutilisable ────────────────────────────────────
 
 class FournisseurAutocomplete extends StatelessWidget {
-  final void Function(FournisseurEntity) onSelected;
+  final void Function(FournisseurEntity?) onSelected; // Changé pour accepter null
   final FournisseurEntity? initialValue;
   final String? label;
 
@@ -736,9 +736,11 @@ class FournisseurAutocomplete extends StatelessWidget {
       },
       onSelected: onSelected,
       fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
-        // CORRECTION: Si le controlleur est vide mais qu'on a une valeur initiale (rebuild), on remplit
-        if (ctrl.text.isEmpty && initialText.isNotEmpty) {
-          ctrl.text = initialText;
+        // Synchroniser le texte du contrôleur si la valeur initiale change
+        if (ctrl.text != initialText && initialValue != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (ctrl.text != initialText) ctrl.text = initialText;
+          });
         }
 
         return TextFormField(
@@ -747,7 +749,15 @@ class FournisseurAutocomplete extends StatelessWidget {
           decoration: InputDecoration(
             labelText: label ?? 'Fournisseur *',
             prefixIcon: const Icon(Icons.business),
-            suffixIcon: const Icon(Icons.arrow_drop_down),
+            suffixIcon: ctrl.text.isNotEmpty 
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () {
+                    ctrl.clear();
+                    onSelected(null);
+                  },
+                )
+              : const Icon(Icons.arrow_drop_down),
           ),
           validator: (v) =>
               v == null || v.isEmpty ? 'Fournisseur requis' : null,
