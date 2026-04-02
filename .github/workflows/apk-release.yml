@@ -1,0 +1,66 @@
+name: Build APK & Auto Release with QR
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Get latest tag
+        id: tag
+        run: |
+          git fetch --tags
+          TAG=$(git tag --sort=-v:refname | head -n 1)
+          if [ -z "$TAG" ]; then
+            echo "NEW_TAG=v1.0.0" >> $GITHUB_ENV
+          else
+            VERSION=${TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            PATCH=$((PATCH+1))
+            echo "NEW_TAG=v$MAJOR.$MINOR.$PATCH" >> $GITHUB_ENV
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Install QR tool
+        run: sudo apt-get update && sudo apt-get install -y qrencode
+
+      - name: Generate QR code for APK
+        run: |
+          mkdir -p output
+          RELEASE_URL="https://github.com/Connacri/Hospital-Inventory/releases/latest/download/app-${{ env.NEW_TAG }}.apk"
+          qrencode -o output/qr-${{ env.NEW_TAG }}.png "$RELEASE_URL"
+          cp build/app/outputs/flutter-apk/app-release.apk output/app-${{ env.NEW_TAG }}.apk
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.NEW_TAG }}
+          name: Release ${{ env.NEW_TAG }}
+          files: |
+            output/app-${{ env.NEW_TAG }}.apk
+            output/qr-${{ env.NEW_TAG }}.png
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
