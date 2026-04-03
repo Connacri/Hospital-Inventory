@@ -76,6 +76,14 @@ class FactureRepository extends BaseRepository<FactureEntity> {
       .build()
       .find();
 
+  List<FactureEntity> getByFournisseur(String fournisseurUuid) => box
+      .query(FactureEntity_.fournisseurUuid
+          .equals(fournisseurUuid)
+          .and(FactureEntity_.isDeleted.equals(false)))
+      .order(FactureEntity_.dateFacture, flags: Order.descending)
+      .build()
+      .find();
+
   List<LigneFactureEntity> getLignes(String factureUuid) =>
       ObjectBoxStore.instance.lignesFacture
           .query(LigneFactureEntity_.factureUuid.equals(factureUuid))

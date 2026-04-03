@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/objectbox/entities.dart';
@@ -10,6 +11,7 @@ import '../../../core/objectbox/objectbox_store.dart';
 import '../../../core/repositories/base_repository.dart';
 import '../../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
+import '../reception/reception_module.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // REPOSITORY
@@ -223,11 +225,11 @@ class FournisseursListScreen extends StatefulWidget {
 
 class _FournisseursListScreenState extends State<FournisseursListScreen> {
   final _searchCtrl = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    // Utilisation de postFrameCallback pour éviter l'erreur de build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<FournisseurProvider>().loadAll();
@@ -241,8 +243,10 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
     final list = _searchCtrl.text.isEmpty
         ? provider.fournisseurs
         : provider.searchResults;
+    final theme = Theme.of(context);
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Fournisseurs'),
         actions: [
@@ -262,7 +266,7 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
               controller: _searchCtrl,
               decoration: InputDecoration(
                 hintText: 'Rechercher par nom, NIF, RC...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search, color: theme.colorScheme.primary),
                 suffixIcon: _searchCtrl.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear),
@@ -279,17 +283,22 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
 
           // ── Compteur ──
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
+                Icon(Icons.business_center_outlined, size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
                 Text(
-                  '${list.length} fournisseur(s)',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  '${list.length} partenaires santé',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
 
           // ── Liste ──
           Expanded(
@@ -303,22 +312,32 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
                         : null,
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                     itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, i) {
                       final f = list[i];
                       return _FournisseurCard(
+                      //  key: ValueKey('f_card_${f.uuid}'),
                         fournisseur: f,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FournisseurDetailScreen(fournisseur: f),
+                            ),
+                          );
+                        },
                         onEdit: () => _openForm(context, existing: f),
                         onDelete: () => _confirmDelete(context, f),
-                      ).animate().fadeIn(delay: Duration(milliseconds: i * 30));
+                      ).animate().fadeIn(duration: 300.ms);
                     },
                   ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: null, // CRUCIAL: Empêche l'erreur de layout pendant les transitions
         onPressed: () => _openForm(context),
         icon: const Icon(Icons.add),
         label: const Text('Nouveau fournisseur'),
@@ -364,11 +383,14 @@ class _FournisseursListScreenState extends State<FournisseursListScreen> {
 
 class _FournisseurCard extends StatelessWidget {
   final FournisseurEntity fournisseur;
+  final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _FournisseurCard({
+    super.key,
     required this.fournisseur,
+    required this.onTap,
     required this.onEdit,
     required this.onDelete,
   });
@@ -378,54 +400,435 @@ class _FournisseurCard extends StatelessWidget {
     final f = fournisseur;
     final theme = Theme.of(context);
     
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text(
-            f.raisonSociale.isNotEmpty ? f.raisonSociale[0].toUpperCase() : '?',
-            style: TextStyle(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.bold,
-            ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    f.raisonSociale.isNotEmpty ? f.raisonSociale[0].toUpperCase() : '?',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      f.raisonSociale,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Code: ${f.code}',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+                    ),
+                    if (f.email != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.email_outlined, size: 12, color: theme.colorScheme.outline),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              f.email!,
+                              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Column(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.edit_outlined, color: theme.colorScheme.primary),
+                    onPressed: onEdit,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: onDelete,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        title: Text(
-          f.raisonSociale,
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+// ── Écran Détail Fournisseur ──────────────────────────────────────────────
+
+class FournisseurDetailScreen extends StatefulWidget {
+  final FournisseurEntity fournisseur;
+  const FournisseurDetailScreen({super.key, required this.fournisseur});
+
+  @override
+  State<FournisseurDetailScreen> createState() => _FournisseurDetailScreenState();
+}
+
+class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
+  late List<FactureEntity> _factures;
+  late List<ArticleEntity> _articles;
+  bool _isLoading = false; // Plus besoin d'attendre si on charge en synchrone
+  final GlobalKey<ScaffoldState> _detailScaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDataSync();
+  }
+
+  void _loadDataSync() {
+    final store = ObjectBoxStore.instance;
+    final f = widget.fournisseur;
+
+    // Charger les factures de manière synchrone
+    _factures = store.factures
+        .query(FactureEntity_.fournisseurUuid.equals(f.uuid)
+            .and(FactureEntity_.isDeleted.equals(false)))
+        .order(FactureEntity_.dateFacture, flags: Order.descending)
+        .build()
+        .find();
+
+    // Utiliser la relation ToMany directe pour les articles
+    // Cela évite de requêter manuellement la table de jonction
+    _articles = f.articles.where((a) => !a.isDeleted).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final f = widget.fournisseur;
+
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        key: _detailScaffoldKey,
+        appBar: AppBar(
+          title: const Text('Fiche Fournisseur'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => _openEdit(context),
+            ),
+          ],
+          bottom: const TabBar(
+            indicatorWeight: 3,
+            tabs: [
+              Tab(icon: Icon(Icons.info_outline), text: 'Profil'),
+              Tab(icon: Icon(Icons.receipt_long_outlined), text: 'Factures'),
+              Tab(icon: Icon(Icons.category_outlined), text: 'Articles'),
+            ],
+          ),
         ),
-        subtitle: Column(
+        body: TabBarView(
+          children: [
+            _buildInfoTab(context),
+            _buildFacturesTab(context),
+            _buildArticlesTab(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTab(BuildContext context) {
+    final f = widget.fournisseur;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(context),
+              const SizedBox(height: 24),
+              _buildSection(
+                context,
+                title: 'Informations Générales',
+                icon: Icons.info_outline,
+                content: [
+                  _buildInfoTile(context, 'Raison Sociale', f.raisonSociale),
+                  _buildInfoTile(context, 'Code Fournisseur', f.code),
+                  _buildInfoTile(context, 'NIF', f.nif ?? 'Non renseigné'),
+                  _buildInfoTile(context, 'RC', f.rc ?? 'Non renseigné'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildSection(
+                context,
+                title: 'Contact & Localisation',
+                icon: Icons.contact_page_outlined,
+                content: [
+                  _buildInfoTile(context, 'Adresse', f.adresse ?? 'Non renseignée', isLong: true),
+                  _buildInfoTile(context, 'Téléphone', f.telephone ?? 'Non renseigné'),
+                  _buildInfoTile(context, 'Email', f.email ?? 'Non renseigné'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildSection(
+                context,
+                title: 'Conditions & Notes',
+                icon: Icons.payment_outlined,
+                content: [
+                  _buildInfoTile(context, 'Délai de paiement', '${f.conditionsPaiement} jours'),
+                  _buildInfoTile(context, 'RIB / Coordonnées Bancaires', f.rib ?? 'Non renseigné', isLong: true),
+                  _buildInfoTile(context, 'Observations', f.observations ?? 'Aucune observation', isLong: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFacturesTab(BuildContext context) {
+    if (_factures.isEmpty) {
+      return _buildEmptyState(context, 'Aucune facture pour ce fournisseur', Icons.receipt_long_outlined);
+    }
+
+    final theme = Theme.of(context);
+    final fmt = DateFormat('dd/MM/yyyy');
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _factures.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final fact = _factures[i];
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              child: Icon(Icons.receipt, color: theme.colorScheme.primary, size: 20),
+            ),
+            title: Text('Facture N° ${fact.numeroFacture}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Date: ${fmt.format(fact.dateFacture)} • Statut: ${fact.statut.toUpperCase()}'),
+            trailing: Text(
+              '${fact.montantTtc.toStringAsFixed(2)} DA',
+              style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+            ),
+            onTap: () {
+               // Ouvrir le détail de la facture si disponible
+               showDialog(
+                 context: context, 
+                 builder: (_) => FactureDetailDialog(facture: fact)
+               );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildArticlesTab(BuildContext context) {
+    if (_articles.isEmpty) {
+      return _buildEmptyState(context, 'Aucun article référencé pour ce fournisseur', Icons.category_outlined);
+    }
+
+    final theme = Theme.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Table(
+            columnWidths: const {
+              0: FlexColumnWidth(1.5),
+              1: FlexColumnWidth(3),
+              2: FlexColumnWidth(1.2),
+              3: FlexColumnWidth(1),
+            },
+            border: TableBorder(horizontalInside: BorderSide(color: theme.dividerColor, width: 0.5)),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: theme.colorScheme.primary.withOpacity(0.05)),
+                children: [
+                  _buildTableCell('Code', isHeader: true),
+                  _buildTableCell('Désignation', isHeader: true),
+                  _buildTableCell('P.U Moyen', isHeader: true),
+                  _buildTableCell('Stock', isHeader: true),
+                ],
+              ),
+              ..._articles.map((art) => TableRow(
+                children: [
+                  _buildTableCell(art.codeArticle),
+                  _buildTableCell(art.designation),
+                  _buildTableCell('${art.prixUnitaireMoyen.toStringAsFixed(0)} DA'),
+                  _buildTableCell('${art.stockActuel}', isBold: true),
+                ],
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableCell(String text, {bool isHeader = false, bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: isHeader || isBold ? FontWeight.bold : FontWeight.normal,
+          fontSize: isHeader ? 12 : 13,
+          color: isHeader ? Colors.teal.shade900 : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, String message, IconData icon) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: theme.colorScheme.outline.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          Text(message, style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.outline)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 40,
+            backgroundColor: Colors.white,
+            child: Text(
+              widget.fournisseur.raisonSociale[0].toUpperCase(),
+              style: theme.textTheme.displaySmall?.copyWith(color: theme.colorScheme.primary),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.fournisseur.raisonSociale,
+                  style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'ID: ${widget.fournisseur.uuid.substring(0, 8).toUpperCase()}',
+                    style: theme.textTheme.labelMedium?.copyWith(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(BuildContext context, {required String title, required IconData icon, required List<Widget> content}) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${f.code}  •  ${f.conditionsPaiement}j',
-              style: theme.textTheme.bodySmall,
+            Row(
+              children: [
+                Icon(icon, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                ),
+              ],
             ),
-            if (f.telephone != null || f.email != null)
-              Text(
-                [
-                  f.telephone,
-                  f.email,
-                ].where((s) => s != null && s.isNotEmpty).join('  •  '),
-                style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
-              ),
+            const Divider(height: 32),
+            ...content,
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: onEdit,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: onDelete,
-            ),
-          ],
-        ),
-        isThreeLine: true,
       ),
+    );
+  }
+
+  Widget _buildInfoTile(BuildContext context, String label, String value, {bool isLong = false}) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              fontWeight: isLong ? FontWeight.normal : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEdit(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => FournisseurFormDialog(existing: widget.fournisseur),
     );
   }
 }

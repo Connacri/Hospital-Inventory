@@ -236,7 +236,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // SECTION: ACTIONS RAPIDES (UX INTELLIGENT)
                   Row(
                     children: [
-                      const Icon(Icons.bolt, color: Colors.amber, size: 20),
+                      Icon(Icons.bolt, color: Theme.of(context).colorScheme.secondary, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Actions rapides',
@@ -252,25 +252,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _QuickActionBtn(
                           label: 'Scanner QR',
                           icon: Icons.qr_code_scanner,
-                          color: Colors.blue,
+                          color: Theme.of(context).colorScheme.primary,
                           onTap: () => _handleQuickScan(context),
                         ),
                         _QuickActionBtn(
                           label: 'Nouvel article',
                           icon: Icons.add_box_outlined,
-                          color: Colors.green,
+                          color: const Color(0xFF2E7D32),
                           onTap: () => _handleNewArticle(context),
                         ),
                         _QuickActionBtn(
                           label: 'Faire Inventaire',
                           icon: Icons.playlist_add_check,
-                          color: Colors.orange,
+                          color: const Color(0xFF00897B),
                           onTap: () => _handleInventory(context),
                         ),
                         _QuickActionBtn(
                           label: 'Rapports PDF',
                           icon: Icons.picture_as_pdf_outlined,
-                          color: Colors.red,
+                          color: const Color(0xFFC62828),
                           onTap: () => _handleReports(context),
                         ),
                       ],
@@ -281,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   Row(
                     children: [
-                      const Icon(Icons.analytics_outlined, color: Colors.blue, size: 20),
+                      Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'État de l\'inventaire',
@@ -294,6 +294,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // Utilisation d'un GridView adaptatif au lieu de Wrap pour les KPIs
                   LayoutBuilder(
                     builder: (context, constraints) {
+                      final theme = Theme.of(context);
                       final crossAxisCount = constraints.maxWidth > 800 ? 6 : (constraints.maxWidth > 500 ? 3 : 2);
                       return GridView.count(
                         crossAxisCount: crossAxisCount,
@@ -307,37 +308,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             label: 'Total articles',
                             value: '${dash.totalArticles}',
                             icon: Icons.inventory_2_outlined,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: theme.colorScheme.primary,
                           ),
                           _KpiCard(
                             label: 'En stock',
                             value: '${dash.articlesEnStock}',
                             icon: Icons.warehouse_outlined,
-                            color: Colors.blue,
+                            color: const Color(0xFF00695C),
                           ),
                           _KpiCard(
                             label: 'Affectés',
                             value: '${dash.articlesAffectes}',
                             icon: Icons.assignment_outlined,
-                            color: Colors.green,
+                            color: const Color(0xFF2E7D32),
                           ),
                           _KpiCard(
                             label: 'Maintenance',
                             value: '${dash.articlesMaintenance}',
                             icon: Icons.build_outlined,
-                            color: Colors.orange,
+                            color: const Color(0xFFEF6C00),
                           ),
                           _KpiCard(
                             label: 'Réformés',
                             value: '${dash.articlesReformes}',
                             icon: Icons.archive_outlined,
-                            color: Colors.grey,
+                            color: const Color(0xFF546E7A),
                           ),
                           _KpiCard(
                             label: 'Fournisseurs',
                             value: '${dash.totalFournisseurs}',
                             icon: Icons.business_outlined,
-                            color: Colors.indigo,
+                            color: const Color(0xFF1565C0),
                           ),
                         ],
                       );
@@ -363,7 +364,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         physics: const NeverScrollableScrollPhysics(),
                         mainAxisSpacing: 12,
                         crossAxisSpacing: 12,
-                        childAspectRatio: crossAxisCount == 1 ? 3 : 1.8,
+                        childAspectRatio: crossAxisCount == 1 ? 2.5 : 1.8,
                         children: [
                           _KpiCard(
                             label: 'Valeur acquisition',
@@ -927,7 +928,7 @@ class _KpiCard extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: color,
                 fontFamily: 'Inter',
@@ -938,7 +939,7 @@ class _KpiCard extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               color: Colors.grey,
               fontWeight: FontWeight.w500,
             ),

@@ -44,35 +44,55 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final isLarge = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
       appBar: !isLarge ? AppBar(
         title: Text(_menuItems[_selectedIndex]['label']),
+        elevation: 0,
       ) : null,
       drawer: !isLarge ? Drawer(
+        backgroundColor: theme.colorScheme.background,
         child: Column(
           children: [
             const _UserHeader(isDrawer: true),
-            const Divider(height: 1),
             Expanded(
               child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 itemCount: _menuItems.length,
-                itemBuilder: (context, i) => ListTile(
-                  leading: Icon(_selectedIndex == i ? _menuItems[i]['selectedIcon'] : _menuItems[i]['icon']),
-                  title: Text(_menuItems[i]['label']),
-                  selected: _selectedIndex == i,
-                  onTap: () {
-                    setState(() => _selectedIndex = i);
-                    Navigator.pop(context);
-                  },
-                ),
+                itemBuilder: (context, i) {
+                  final isSelected = _selectedIndex == i;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: ListTile(
+                      leading: Icon(
+                        isSelected ? _menuItems[i]['selectedIcon'] : _menuItems[i]['icon'],
+                        color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline,
+                      ),
+                      title: Text(
+                        _menuItems[i]['label'],
+                        style: TextStyle(
+                          color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      selected: isSelected,
+                      selectedTileColor: theme.colorScheme.primary.withOpacity(0.1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      onTap: () {
+                        setState(() => _selectedIndex = i);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  );
+                },
               ),
             ),
-            const Divider(height: 1),
+            const Divider(indent: 20, endIndent: 20),
             ListTile(
-              leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: const Text('Déconnexion', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500)),
               onTap: () => context.read<AuthProvider>().logout(),
             ),
             const SizedBox(height: 16),
@@ -82,31 +102,58 @@ class _MainShellState extends State<MainShell> {
       body: Row(
         children: [
           if (isLarge)
-            NavigationRail(
-              extended: true,
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-              leading: const _UserHeader(isDrawer: false),
-              destinations: _menuItems.map((item) => NavigationRailDestination(
-                icon: Icon(item['icon']),
-                selectedIcon: Icon(item['selectedIcon']),
-                label: Text(item['label']),
-              )).toList(),
-              trailing: Expanded(
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout),
-                      onPressed: () => context.read<AuthProvider>().logout(),
+            Container(
+              width: 260,
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: NavigationRail(
+                extended: true,
+                backgroundColor: theme.colorScheme.surface,
+                indicatorColor: theme.colorScheme.primary.withOpacity(0.1),
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+                leading: const _UserHeader(isDrawer: false),
+                minExtendedWidth: 260,
+                destinations: _menuItems.map((item) => NavigationRailDestination(
+                  icon: Icon(item['icon'], color: theme.colorScheme.outline),
+                  selectedIcon: Icon(item['selectedIcon'], color: theme.colorScheme.primary),
+                  label: Text(
+                    item['label'],
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                )).toList(),
+                trailing: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      ListTile(
+                        leading: const Icon(Icons.logout, color: Colors.redAccent),
+                        title: const Text('Déconnexion', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+                        onTap: () => context.read<AuthProvider>().logout(),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-          if (isLarge) const VerticalDivider(width: 1),
-          Expanded(child: _screens[_selectedIndex]),
+          Expanded(
+            child: Container(
+              color: theme.colorScheme.background,
+              child: _screens[_selectedIndex],
+            ),
+          ),
         ],
       ),
     );
@@ -119,27 +166,41 @@ class _UserHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const SizedBox.shrink();
 
     if (isDrawer) {
-      return DrawerHeader(
-        decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer),
+      return Container(
+        padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary,
+          borderRadius: const BorderRadius.only(bottomRight: Radius.circular(40)),
+        ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 30,
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: Text(user.nomComplet[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 24)),
+              backgroundColor: Colors.white,
+              child: Text(
+                user.nomComplet[0].toUpperCase(),
+                style: TextStyle(color: theme.colorScheme.primary, fontSize: 24, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(user.nomComplet, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(user.role.toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                  Text(
+                    user.nomComplet,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    user.role.toUpperCase(),
+                    style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8), letterSpacing: 1.2),
+                  ),
                 ],
               ),
             ),
@@ -149,21 +210,41 @@ class _UserHeader extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      child: Row(
+      width: 260,
+      padding: const EdgeInsets.all(24),
+      child: Column(
         children: [
-          CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: Text(user.nomComplet[0].toUpperCase(), style: const TextStyle(color: Colors.white)),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: theme.colorScheme.primary, width: 2),
+            ),
+            child: CircleAvatar(
+              radius: 35,
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              child: Text(
+                user.nomComplet[0].toUpperCase(),
+                style: TextStyle(color: theme.colorScheme.primary, fontSize: 28, fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(user.nomComplet, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              Text(user.role.toUpperCase(), style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-            ],
+          const SizedBox(height: 16),
+          Text(
+            user.nomComplet,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
           ),
+          Text(
+            user.role.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.primary,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
         ],
       ),
     );

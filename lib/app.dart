@@ -24,16 +24,23 @@ class HopitalInventaireApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primaryBlue = Color(0xFF1565C0);
-    const textDark = Color(0xFF1A1C1E);
-    const surfaceLight = Color(0xFFF8F9FA);
+    // ── PALETTE SANTÉ & HOSPITALIÈRE (VERT MÉDICAL PROFESSIONNEL) ──
+    const primaryGreen = Color(0xFF00796B); // Vert médical profond
+    const secondaryGreen = Color(0xFF4DB6AC); // Vert d'accentuation doux
+    const backgroundLight = Color(0xFFF1F8E9); // Fond vert très pâle (apaisant)
+    const surfaceWhite = Colors.white;
+    const textDark = Color(0xFF263238); // Gris-bleu très foncé pour le texte
+    const errorRed = Color(0xFFD32F2F);
 
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: primaryBlue,
-      primary: primaryBlue,
-      surface: Colors.white,
+      seedColor: primaryGreen,
+      primary: primaryGreen,
+      secondary: secondaryGreen,
+      surface: surfaceWhite,
+      background: backgroundLight,
       onPrimary: Colors.white,
       onSurface: textDark,
+      error: errorRed,
       brightness: Brightness.light,
     );
 
@@ -53,74 +60,85 @@ class HopitalInventaireApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
       child: MaterialApp(
-        title: 'Inventaire Hospitalier',
+        title: 'Plateau - Gestion Hospitalière',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: colorScheme,
-          scaffoldBackgroundColor: surfaceLight,
+          scaffoldBackgroundColor: backgroundLight,
 
-          // ── TYPOGRAPHIE EXPERTE (NORMES INTERNATIONALES M3) ──
+          // ── TYPOGRAPHIE MODERNE & LISIBLE (SANTÉ) ──
           textTheme: TextTheme(
-            // Display: Pour les grands titres d'accueil (Hero)
-            displayLarge: GoogleFonts.playfairDisplay(fontSize: 57, fontWeight: FontWeight.bold, letterSpacing: -0.25),
-            displayMedium: GoogleFonts.playfairDisplay(fontSize: 45, fontWeight: FontWeight.bold),
-            displaySmall: GoogleFonts.playfairDisplay(fontSize: 36, fontWeight: FontWeight.bold),
+            displayLarge: GoogleFonts.lexend(fontSize: 57, fontWeight: FontWeight.bold, letterSpacing: -0.25),
+            displayMedium: GoogleFonts.lexend(fontSize: 45, fontWeight: FontWeight.bold),
+            displaySmall: GoogleFonts.lexend(fontSize: 36, fontWeight: FontWeight.bold),
             
-            // Headlines: Pour les titres de sections majeures
-            headlineLarge: GoogleFonts.playfairDisplay(fontSize: 32, fontWeight: FontWeight.w600),
-            headlineMedium: GoogleFonts.playfairDisplay(fontSize: 28, fontWeight: FontWeight.w600),
-            headlineSmall: GoogleFonts.playfairDisplay(fontSize: 24, fontWeight: FontWeight.w600),
+            headlineLarge: GoogleFonts.lexend(fontSize: 32, fontWeight: FontWeight.w600),
+            headlineMedium: GoogleFonts.lexend(fontSize: 28, fontWeight: FontWeight.w600),
+            headlineSmall: GoogleFonts.lexend(fontSize: 24, fontWeight: FontWeight.w600),
             
-            // Titles: Pour les titres de composants (Cards, AppBars)
-            titleLarge: GoogleFonts.playfairDisplay(fontSize: 22, fontWeight: FontWeight.w600),
+            titleLarge: GoogleFonts.lexend(fontSize: 22, fontWeight: FontWeight.w600),
             titleMedium: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, letterSpacing: 0.15),
             titleSmall: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
             
-            // Body: Texte de lecture standard (Lisibilité maximale)
             bodyLarge: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, letterSpacing: 0.5),
             bodyMedium: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, letterSpacing: 0.25),
             bodySmall: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400, letterSpacing: 0.4),
             
-            // Labels: Boutons, sous-titres techniques, badges
-            labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
-            labelMedium: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.5),
-            labelSmall: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+            labelLarge: GoogleFonts.lexend(fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.1),
+            labelMedium: GoogleFonts.lexend(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+            labelSmall: GoogleFonts.lexend(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5),
           ).apply(bodyColor: textDark, displayColor: textDark),
 
           appBarTheme: AppBarTheme(
             centerTitle: false,
             elevation: 0,
-            backgroundColor: primaryBlue,
+            backgroundColor: primaryGreen,
             foregroundColor: Colors.white,
-            titleTextStyle: GoogleFonts.playfairDisplay(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+            titleTextStyle: GoogleFonts.lexend(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
               color: Colors.white,
             ),
             iconTheme: const IconThemeData(color: Colors.white, size: 24),
           ),
 
-          navigationRailTheme: NavigationRailThemeData(
-            backgroundColor: Colors.white,
-            selectedIconTheme: const IconThemeData(color: primaryBlue, size: 28),
-            unselectedIconTheme: IconThemeData(color: Colors.grey.shade600, size: 24),
-            selectedLabelTextStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.bold, color: primaryBlue),
-            unselectedLabelTextStyle: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
-          ),
-
           cardTheme: CardThemeData(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+            color: surfaceWhite,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: primaryGreen.withOpacity(0.1), width: 1),
+            ),
           ),
 
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            labelStyle: GoogleFonts.inter(fontSize: 14),
-            hintStyle: GoogleFonts.inter(fontSize: 14),
+            fillColor: surfaceWhite,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primaryGreen.withOpacity(0.2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primaryGreen.withOpacity(0.1)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: primaryGreen, width: 2),
+            ),
+            labelStyle: GoogleFonts.inter(fontSize: 14, color: textDark.withOpacity(0.7)),
+          ),
+
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              backgroundColor: primaryGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              textStyle: GoogleFonts.lexend(fontWeight: FontWeight.w500),
+            ),
           ),
         ),
         home: const _RootNavigator(),
