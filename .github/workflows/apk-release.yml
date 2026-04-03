@@ -4,7 +4,6 @@ permissions:
 on:
   push:
     branches: [ master ]
-  
 
 jobs:
   build:
@@ -54,7 +53,7 @@ jobs:
           fi
       # 6️⃣ Build APK release
       - name: Build APK
-  run: flutter build apk --release --build-name=$(echo $NEW_TAG | cut -d+ -f1 | sed 's/v//') --build-number=$(echo $NEW_TAG | cut -d+ -f2)
+        run: flutter build apk --release
 
       # 7️⃣ Installer qrencode pour générer le QR code
       - name: Install QR tool
@@ -64,7 +63,7 @@ jobs:
       - name: Generate QR code and move APK
         run: |
           mkdir -p output
-          RELEASE_URL="https://github.com/Connacri/Hospital-Inventory/releases/download/${{ env.NEW_TAG }}/app-${{ env.NEW_TAG }}.apk"
+          RELEASE_URL="https://github.com/Connacri/Hospital-Inventory/releases/latest/download/app-${{ env.NEW_TAG }}.apk"
           qrencode -o output/qr-${{ env.NEW_TAG }}.png "$RELEASE_URL"
           cp build/app/outputs/flutter-apk/app-release.apk output/app-${{ env.NEW_TAG }}.apk
 
@@ -78,4 +77,4 @@ jobs:
             output/app-${{ env.NEW_TAG }}.apk
             output/qr-${{ env.NEW_TAG }}.png
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Utilise ton token personnel
+          GITHUB_TOKEN: ${{ secrets.MY_PAT }}   # Utilise ton token personnel
