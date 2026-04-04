@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/extensions/string_extensions.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
@@ -16,7 +17,6 @@ import '../../core/services/numero_generator.dart';
 import '../../objectbox.g.dart';
 import '../administration/administration_module.dart';
 import '../articles/article_module.dart';
-import '../inventaire/inventaire_module.dart';
 import '../../shared/widgets/app_toast.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,7 +303,6 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<BonDotationProvider>();
-    final theme = Theme.of(context);
     final fmt = DateFormat('dd/MM/yyyy');
 
     return Scaffold(
@@ -341,7 +340,7 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      '${service?.libelle ?? "Service inconnu"} • ${fmt.format(b.dateDemande!)}',
+                      '${(service?.libelle ?? "Service inconnu").toTitleCase()} • ${fmt.format(b.dateDemande)}',
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -475,9 +474,9 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -547,10 +546,11 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                 .findFirst()
             : null;
         _lignes.add(
-          _LigneRequestModel()
-            ..article = art
-            ..designationManuelle = l.articleDesignationHorsCatalogue ?? art?.designation ?? ''
-            ..quantite = l.quantiteDemandee,
+          _LigneRequestModel(
+            article: art,
+            initialText: l.articleDesignationHorsCatalogue ?? art?.designation,
+            quantite: l.quantiteDemandee,
+          )
         );
       }
     } else {
@@ -566,6 +566,7 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
 
   void _removeLigne(int index) {
     if (_lignes.length > 1) {
+      _lignes[index].dispose();
       setState(() => _lignes.removeAt(index));
     }
   }
@@ -573,6 +574,7 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
   @override
   void dispose() {
     numeroBdController.dispose();
+    for(var l in _lignes) { l.dispose(); }
     super.dispose();
   }
 
@@ -668,21 +670,21 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                               flex: 8,
                               child: ArticleAutocomplete(
                                 initialValue: _lignes[i].article,
-                                initialText: _lignes[i].designationManuelle,
+                                initialText: _lignes[i].controller.text,
                                 onSelected: (a) {
                                   setState(() {
                                     _lignes[i].article = a;
                                     _lignes[i].designationManuelle = a.designation;
+                                    _lignes[i].controller.text = a.designation;
                                   });
                                 },
                                 onSearchChanged: (text) {
-                                  setState(() {
-                                    _lignes[i].designationManuelle = text;
-                                    // Si on modifie le texte, on perd le lien avec l'article du catalogue
-                                    if (_lignes[i].article?.designation != text) {
-                                      _lignes[i].article = null;
-                                    }
-                                  });
+                                  // On met à jour le modèle DIRECTEMENT
+                                  _lignes[i].designationManuelle = text;
+                                  _lignes[i].controller.text = text;
+                                  if (_lignes[i].article?.designation != text) {
+                                    _lignes[i].article = null;
+                                  }
                                 },
                               ),
                             ),
@@ -887,8 +889,15 @@ class _LigneRequestModel {
   ArticleEntity? article;
   String designationManuelle = '';
   int quantite = 1;
+  // On ajoute un contrôleur pour suivre le texte en temps réel sans dépendre du focus
+  final TextEditingController controller = TextEditingController();
 
-  _LigneRequestModel({this.article, this.designationManuelle = '', this.quantite = 1});
+  _LigneRequestModel({this.article, String? initialText, this.quantite = 1}) {
+    designationManuelle = initialText ?? article?.designation ?? '';
+    controller.text = designationManuelle;
+  }
+  
+  void dispose() => controller.dispose();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1091,7 +1100,7 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        designation,
+                        designation.toTitleCase(),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -1111,7 +1120,7 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.2),
+                                  color: Colors.orange.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(color: Colors.orange),
                                 ),
@@ -1415,11 +1424,12 @@ class _InventoryPicker extends StatelessWidget {
         .build()
         .find();
 
-    if (items.isEmpty)
+    if (items.isEmpty) {
       return const Text(
         'Aucune unité disponible en stock pour cet article.',
         style: TextStyle(color: Colors.red, fontSize: 12),
       );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

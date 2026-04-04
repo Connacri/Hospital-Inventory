@@ -1136,7 +1136,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(13, 5754123793449760919),
       name: 'LigneDotationEntity',
-      lastPropertyId: const obx_int.IdUid(11, 5084732360267983898),
+      lastPropertyId: const obx_int.IdUid(12, 6906545632312802149),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -1195,6 +1195,11 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(11, 5084732360267983898),
             name: 'createdAt',
             type: 10,
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(12, 6906545632312802149),
+            name: 'articleDesignationHorsCatalogue',
+            type: 9,
             flags: 0)
       ],
       relations: <obx_int.ModelRelation>[],
@@ -2862,7 +2867,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final articleUuidOffset = fbb.writeString(object.articleUuid);
           final syncStatusOffset = fbb.writeString(object.syncStatus);
           final deviceIdOffset = fbb.writeString(object.deviceId);
-          fbb.startTable(12);
+          final articleDesignationHorsCatalogueOffset =
+              object.articleDesignationHorsCatalogue == null
+                  ? null
+                  : fbb.writeString(object.articleDesignationHorsCatalogue!);
+          fbb.startTable(13);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, uuidOffset);
           fbb.addOffset(2, bonDotationUuidOffset);
@@ -2874,6 +2883,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(8, deviceIdOffset);
           fbb.addInt64(9, object.updatedAt.millisecondsSinceEpoch);
           fbb.addInt64(10, object.createdAt.millisecondsSinceEpoch);
+          fbb.addOffset(11, articleDesignationHorsCatalogueOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
@@ -2902,7 +2912,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
             ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
                 const fb.Int64Reader().vTableGet(buffer, rootOffset, 22, 0))
             ..createdAt = DateTime.fromMillisecondsSinceEpoch(
-                const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0));
+                const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0))
+            ..articleDesignationHorsCatalogue =
+                const fb.StringReader(asciiOptimization: true)
+                    .vTableGetNullable(buffer, rootOffset, 26);
 
           return object;
         }),
@@ -4308,6 +4321,11 @@ class LigneDotationEntity_ {
   /// See [LigneDotationEntity.createdAt].
   static final createdAt =
       obx.QueryDateProperty<LigneDotationEntity>(_entities[12].properties[10]);
+
+  /// See [LigneDotationEntity.articleDesignationHorsCatalogue].
+  static final articleDesignationHorsCatalogue =
+      obx.QueryStringProperty<LigneDotationEntity>(
+          _entities[12].properties[11]);
 }
 
 /// [LigneFactureEntity] entity fields to define ObjectBox queries.

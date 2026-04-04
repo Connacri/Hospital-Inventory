@@ -9,6 +9,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/extensions/string_extensions.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
@@ -62,7 +63,9 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
   ArticleRepository() : super(box: ObjectBoxStore.instance.articles, tableName: 'articles');
 
   @override ArticleEntity? getByUuid(String uuid) => box.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst();
-  @override List<ArticleEntity> getAll() => box.query(ArticleEntity_.isDeleted.equals(false).and(ArticleEntity_.actif.equals(true))).order(ArticleEntity_.designation).build().find();
+  @override List<ArticleEntity> getAll() => box.query(ArticleEntity_.isDeleted.equals(false).and(ArticleEntity_.actif.equals(true)))
+      .order(ArticleEntity_.createdAt, flags: Order.descending)
+      .build().find();
 
   List<ArticleEntity> search(String q) {
     if (q.isEmpty) return getAll();
@@ -245,7 +248,7 @@ class _ArticleTile extends StatelessWidget {
     final isLow = article.stockMinimum > 0 && article.stockActuel <= article.stockMinimum;
     return Card(
       elevation: 0, margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isLow ? _MedPalette.errorRed.withOpacity(0.3) : _MedPalette.divider)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isLow ? _MedPalette.errorRed.withValues(alpha: 0.3) : _MedPalette.divider)),
       child: InkWell(
         onTap: () => showDialog(context: context, builder: (_) => ArticleDetailDialog(article: article)),
         borderRadius: BorderRadius.circular(16),
@@ -255,7 +258,7 @@ class _ArticleTile extends StatelessWidget {
             children: [
               Container(
                 width: 56, height: 56,
-                decoration: BoxDecoration(color: isLow ? _MedPalette.errorRed.withOpacity(0.1) : _MedPalette.primaryContainer, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: isLow ? _MedPalette.errorRed.withValues(alpha: 0.1) : _MedPalette.primaryContainer, borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.medication_rounded, color: isLow ? _MedPalette.errorRed : _MedPalette.primary, size: 30),
               ),
               const SizedBox(width: 16),
@@ -290,8 +293,11 @@ class _ArticleMenu extends StatelessWidget {
         const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: _MedPalette.errorRed), SizedBox(width: 12), Text('Supprimer', style: TextStyle(color: _MedPalette.errorRed))])),
       ],
       onSelected: (v) {
-        if (v == 'edit') showDialog(context: context, builder: (_) => ArticleFormDialog(existing: article));
-        else if (v == 'delete') _confirmDelete(context);
+        if (v == 'edit') {
+          showDialog(context: context, builder: (_) => ArticleFormDialog(existing: article));
+        } else if (v == 'delete') {
+          _confirmDelete(context);
+        }
       },
     );
   }
@@ -362,9 +368,14 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   void _updateSerialCtrls() {
     final count = int.tryParse(_quantiteInitiale.text) ?? 0;
     if (count > _serialCtrls.length) {
-      for (int i = _serialCtrls.length; i < count; i++) _serialCtrls.add(TextEditingController());
+      for (int i = _serialCtrls.length; i < count; i++) {
+        _serialCtrls.add(TextEditingController());
+      }
     } else if (count < _serialCtrls.length) {
-      for (int i = _serialCtrls.length - 1; i >= count; i--) { _serialCtrls[i].dispose(); _serialCtrls.removeAt(i); }
+      for (int i = _serialCtrls.length - 1; i >= count; i--) {
+        _serialCtrls[i].dispose();
+        _serialCtrls.removeAt(i);
+      }
     }
   }
 
@@ -395,7 +406,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
             TextFormField(controller: _designation, decoration: const InputDecoration(labelText: 'Désignation *', prefixIcon: Icon(Icons.label_important_outline)), validator: (v) => v!.isEmpty ? 'Requis' : null),
             const SizedBox(height: 16),
             Row(children: [
-              Expanded(flex: 2, child: DropdownButtonFormField<String>(value: _catUuid, decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)), items: prov.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle))).toList(), onChanged: (v) => setState(() => _catUuid = v), validator: (v) => v == null ? 'Requis' : null)),
+              Expanded(flex: 2, child: DropdownButtonFormField<String>(initialValue: _catUuid, decoration: const InputDecoration(labelText: 'Catégorie *', prefixIcon: Icon(Icons.category_outlined)), items: prov.categories.map((c) => DropdownMenuItem(value: c.uuid, child: Text(c.libelle.toTitleCase()))).toList(), onChanged: (v) => setState(() => _catUuid = v), validator: (v) => v == null ? 'Requis' : null)),
               IconButton(icon: const Icon(Icons.add_circle_outline, color: _MedPalette.primary), onPressed: _openCatForm),
               const SizedBox(width: 12),
               Expanded(child: TextFormField(controller: _madeIn, decoration: const InputDecoration(labelText: 'Provenance', prefixIcon: Icon(Icons.public)))),
@@ -458,7 +469,13 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
 
   void _startScan(int count) async {
     final res = await showDialog<List<String>>(context: context, builder: (_) => ContinuousScannerDialog(count: count));
-    if (res != null) setState(() { for (int i=0; i<res.length && i<_serialCtrls.length; i++) _serialCtrls[i].text = res[i]; });
+    if (res != null) {
+      setState(() {
+        for (int i = 0; i < res.length && i < _serialCtrls.length; i++) {
+          _serialCtrls[i].text = res[i];
+        }
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -479,8 +496,16 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         await artProv.update(a);
         final linkRepo = ArticleFournisseurRepository();
         final links = linkRepo.getByArticle(a.uuid);
-        for (final l in links) if (!_fourUuids.contains(l.fournisseurUuid)) await linkRepo.unlink(a.uuid, l.fournisseurUuid);
-        for (final f in _fourUuids) if (!links.any((x) => x.fournisseurUuid == f)) await linkRepo.link(a.uuid, f);
+        for (final l in links) {
+          if (!_fourUuids.contains(l.fournisseurUuid)) {
+            await linkRepo.unlink(a.uuid, l.fournisseurUuid);
+          }
+        }
+        for (final f in _fourUuids) {
+          if (!links.any((x) => x.fournisseurUuid == f)) {
+            await linkRepo.link(a.uuid, f);
+          }
+        }
       }
       if (mounted) { AppToast.show(context, 'Enregistré avec succès'); Navigator.pop(context); }
     } catch (e) { if (mounted) AppToast.show(context, 'Erreur: $e', isError: true); }
@@ -498,7 +523,19 @@ class ArticleDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final store = ObjectBoxStore.instance;
+
+    final count = store.articlesInventaire
+        .query(
+      ArticleInventaireEntity_.articleUuid
+          .equals(article.uuid)
+          .and(ArticleInventaireEntity_.isDeleted.equals(false)),
+    )
+        .build()
+        .count();
+
     return Dialog(
+
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 750),
@@ -506,14 +543,16 @@ class ArticleDetailDialog extends StatelessWidget {
           Container(padding: const EdgeInsets.all(20), decoration: const BoxDecoration(color: _MedPalette.primaryContainer, borderRadius: BorderRadius.vertical(top: Radius.circular(24))), child: Row(children: [const Icon(Icons.medical_information_outlined, color: _MedPalette.primary), const SizedBox(width: 12), const Text('Fiche Technique Article', style: TextStyle(color: _MedPalette.primary, fontWeight: FontWeight.bold, fontSize: 18)), const Spacer(), IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context))])),
           Expanded(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _row('Code interne', article.codeArticle, code: true),
-            _row('Désignation', article.designation, bold: true),
+            _row('Désignation', article.designation.toTitleCase(), bold: true),
             _row('Stock Disponible', '${article.stockActuel} ${article.uniteMesure}'),
+            _row('Total Existant', '$count ${article.uniteMesure}'),
+
             _row('Prix Moyen (PUMP)', '${article.prixUnitaireMoyen.toStringAsFixed(0)} DA'),
-            _row('Provenance', article.madeIn ?? 'N/A'),
+            _row('Provenance', article.madeIn!.toTitleCase() ?? 'N/A'),
             _row('Code GTIN', article.codeGtin ?? '—'),
             if (article.fournisseurs.isNotEmpty) _row('Fournisseurs', article.fournisseurs.map((f) => f.raisonSociale).join(', ')),
             const Divider(height: 32),
-            Text(article.description ?? 'Aucune description fournie.', style: const TextStyle(color: _MedPalette.subtle, fontSize: 14)),
+            Text(article.description!.toTitleCase() ?? 'Aucune description fournie.', style: const TextStyle(color: _MedPalette.subtle, fontSize: 14)),
             const SizedBox(height: 24),
             const Row(children: [Icon(Icons.warehouse_rounded, size: 18, color: _MedPalette.primary), SizedBox(width: 8), Text('Localisation Unique par Unité', style: TextStyle(fontWeight: FontWeight.bold))]),
             const SizedBox(height: 12),
@@ -549,7 +588,7 @@ class _AffectationListState extends State<_AffectationList> {
       final s = !isStock && e.key != 'inconnu' ? store.services.query(ServiceHopitalEntity_.uuid.equals(e.key)).build().findFirst() : null;
       return Theme(data: Theme.of(context).copyWith(dividerColor: Colors.transparent), child: ExpansionTile(
         leading: Icon(isStock ? Icons.warehouse : Icons.local_hospital, color: isStock ? Colors.blue : _MedPalette.primary),
-        title: Text(isStock ? 'Stock Central' : (s?.libelle ?? 'Service Inconnu'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        title: Text(isStock ? 'Stock Central' : (s?.libelle ?? 'Service Inconnu').toTitleCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text('${e.value.length} unité(s) présente(s) ici', style: const TextStyle(fontSize: 12)),
         children: e.value.map((it) => ListTile(dense: true, leading: const Icon(Icons.qr_code_2_rounded, size: 18), title: Text(it.numeroInventaire, style: const TextStyle(fontWeight: FontWeight.w600)), subtitle: Text('SN: ${it.numeroSerieOrigine ?? "N/A"}'), trailing: _ServiceChip(item: it, onUpdate: () => setState(() {})))).toList(),
       ));
@@ -568,7 +607,6 @@ class _ServiceChip extends StatelessWidget {
     final auth = context.read<AuthProvider>();
 
     if (item.statut == 'affecte' && item.serviceUuid != null) {
-      final s = store.services.query(ServiceHopitalEntity_.uuid.equals(item.serviceUuid!)).build().findFirst();
       return Row(mainAxisSize: MainAxisSize.min, children: [
         ActionChip(
           avatar: const Icon(Icons.swap_horiz, size: 14, color: Colors.white), 
@@ -585,6 +623,7 @@ class _ServiceChip extends StatelessWidget {
 
   void _link(BuildContext context, ObjectBoxStore store, AuthProvider auth) async {
     final res = await showDialog<ServiceHopitalEntity>(context: context, builder: (ctx) => _AffectationIntelligenceDialog(item: item));
+    if (!context.mounted) return;
     if (res != null) {
       final oldS = item.statut; final oldU = item.serviceUuid;
       item.statut = 'affecte'; 
@@ -635,9 +674,20 @@ class _ContinuousScannerDialogState extends State<ContinuousScannerDialog> {
   bool _done = false;
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(title: Text('Scan des Séries (${_codes.length}/${widget.count})'), content: SizedBox(width: 400, height: 500, child: Column(children: [if (!_done) Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: MobileScanner(onDetect: (cap) { for (final b in cap.barcodes) if (b.rawValue != null && !_codes.contains(b.rawValue)) setState(() { _codes.add(b.rawValue!); if (_codes.length >= widget.count) _done = true; }); }))), const SizedBox(height: 16), Expanded(child: ListView.builder(itemCount: _codes.length, itemBuilder: (ctx, i) => ListTile(dense: true, leading: const Icon(Icons.check_circle, color: _MedPalette.success), title: Text(_codes[i]), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => setState(() => _codes.removeAt(i))))))])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: _codes.isEmpty ? null : () => Navigator.pop(context, _codes), child: const Text('Valider'))]);
-  }
-}
+    return AlertDialog(title: Text('Scan des Séries (${_codes.length}/${widget.count})'), content: SizedBox(width: 400, height: 500, child: Column(children: [if (!_done) Expanded(child: ClipRRect(borderRadius: BorderRadius.circular(12), child: MobileScanner(onDetect: (cap) {
+      for (final b in cap.barcodes) {
+        if (b.rawValue != null && !_codes.contains(b.rawValue)) {
+          setState(() {
+            _codes.add(b.rawValue!);
+            if (_codes.length >= widget.count) {
+              _done = true;
+            }
+          });
+        }
+      }
+    }))) , const SizedBox(height: 16), Expanded(child: ListView.builder(itemCount: _codes.length, itemBuilder: (ctx, i) => ListTile(dense: true, leading: const Icon(Icons.check_circle, color: _MedPalette.success), title: Text(_codes[i]), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => setState(() => _codes.removeAt(i))))))])), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: _codes.isEmpty ? null : () => Navigator.pop(context, _codes), child: const Text('Valider'))]);
+    }
+    }
 
 // ───────────────────────────────────────────────────────────────────
 // DIALOGUE DE CRÉATION DE CATÉGORIE
@@ -694,10 +744,15 @@ class _CategorieFormDialogState extends State<CategorieFormDialog> with SingleTi
       final prov = context.read<ArticleProvider>();
       if (widget.existing != null) {
         final c = widget.existing!..code = _code.text.trim().toUpperCase()..libelle = _libelle.text.trim()..type = _type;
-        await prov.updateCategorie(c); Navigator.pop(context, c);
+        await prov.updateCategorie(c);
+        if (mounted) {
+          Navigator.pop(context, c);
+        }
       } else {
         final c = await prov.createCategorie(_code.text.trim().toUpperCase(), _libelle.text.trim(), _type);
-        Navigator.pop(context, c);
+        if (mounted) {
+          Navigator.pop(context, c);
+        }
       }
     } finally { if (mounted) setState(() => _loading = false); }
   }
@@ -721,7 +776,7 @@ class _CategorieFormDialogState extends State<CategorieFormDialog> with SingleTi
               const SizedBox(height: 24),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: _catTypes.map((t) {
                 final isSel = _type == t.value;
-                return InkWell(onTap: () => setState(() => _type = t.value), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSel ? t.accent.withOpacity(0.1) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSel ? t.accent : _CatPalette.divider, width: 2)), child: Column(children: [Icon(t.icon, color: isSel ? t.accent : _MedPalette.subtle), const SizedBox(height: 4), Text(t.label, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? t.accent : _MedPalette.onSurface))])));
+                return InkWell(onTap: () => setState(() => _type = t.value), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isSel ? t.accent.withValues(alpha: 0.1) : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSel ? t.accent : _CatPalette.divider, width: 2)), child: Column(children: [Icon(t.icon, color: isSel ? t.accent : _MedPalette.subtle), const SizedBox(height: 4), Text(t.label, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? t.accent : _MedPalette.onSurface))])));
               }).toList()),
             ]))),
             Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 20), child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -799,7 +854,7 @@ class ArticleAutocomplete extends StatelessWidget {
               itemBuilder: (ctx, i) {
                 final a = options.elementAt(i);
                 return ListTile(
-                  title: Text(a.designation, style: theme.textTheme.bodyLarge),
+                  title: Text(a.designation.toTitleCase(), style: theme.textTheme.bodyLarge),
                   subtitle: Text(
                     '${a.codeArticle} • Stock: ${a.stockActuel} ${a.uniteMesure}',
                     style: theme.textTheme.bodySmall,

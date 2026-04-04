@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../core/auth/auth_provider.dart';
+import '../../core/extensions/string_extensions.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/services/seeder_service.dart';
@@ -328,11 +328,11 @@ class _UserTile extends StatelessWidget {
     final color = _roleColors[user.role] ?? cs.primary;
     return Card(
       elevation: 0, margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: cs.outlineVariant.withOpacity(0.5))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5))),
       child: ListTile(
         onTap: onEdit,
-        leading: CircleAvatar(backgroundColor: color, child: Text(user.nomComplet[0].toUpperCase(), style: const TextStyle(color: Colors.white))),
-        title: Text(user.nomComplet, style: const TextStyle(fontWeight: FontWeight.bold)),
+        leading: CircleAvatar(backgroundColor: color, child: Text(user.nomComplet.isEmpty ? '?' : user.nomComplet[0].toUpperCase(), style: const TextStyle(color: Colors.white))),
+        title: Text(user.nomComplet.toTitleCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('${user.matricule} • ${user.role.toUpperCase()}'),
         trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: onDelete),
       ),
@@ -353,7 +353,7 @@ class _ServiceTile extends StatelessWidget {
       child: ListTile(
         onTap: onEdit,
         leading: const CircleAvatar(child: Icon(Icons.local_hospital_outlined)),
-        title: Text(service.libelle, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(service.libelle.toTitleCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('${service.code} • ${service.batiment ?? "Stock"}'),
         trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: onDelete),
       ),
@@ -374,7 +374,7 @@ class _CategorieTile extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFE0E0E0))),
       child: ListTile(
         leading: Icon(_typeIcons[categorie.type], color: color),
-        title: Text(categorie.libelle, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(categorie.libelle.toTitleCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('${categorie.code} • ${categorie.type.toUpperCase()}'),
       ),
     );
@@ -464,7 +464,7 @@ class _UserFormDialogState extends State<UserFormDialog> {
         TextFormField(controller: _mat, decoration: const InputDecoration(labelText: 'Matricule'), validator: (v) => v!.isEmpty ? 'Requis' : null),
         TextFormField(controller: _email, decoration: const InputDecoration(labelText: 'Email')),
         TextFormField(controller: _pass, decoration: const InputDecoration(labelText: 'Mot de passe'), obscureText: true),
-        DropdownButtonFormField<String>(value: _role, items: _roleIcons.keys.map((r) => DropdownMenuItem(value: r, child: Text(r.toUpperCase()))).toList(), onChanged: (v) => setState(() => _role = v!)),
+        DropdownButtonFormField<String>(initialValue: _role, items: _roleIcons.keys.map((r) => DropdownMenuItem(value: r, child: Text(r.toUpperCase()))).toList(), onChanged: (v) => setState(() => _role = v!)),
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: _save, child: const Text('Enregistrer'))],
     );

@@ -19,6 +19,7 @@ import '../../../core/services/numero_generator.dart';
 import '../../core/repositories/base_repository.dart';
 import '../../objectbox.g.dart';
 
+
 // ─────────────────────────────────────────────────────────────────────────────
 // REPOSITORY
 // ─────────────────────────────────────────────────────────────────────────────
@@ -478,7 +479,7 @@ class _InventaireKpiBarre extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -561,7 +562,7 @@ class _ArticleInventaireTile extends StatelessWidget {
 
     return Card(
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.05),
+      shadowColor: Colors.black.withValues(alpha: 0.05),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -722,7 +723,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             theme.colorScheme.primaryContainer,
-            theme.colorScheme.primary.withOpacity(0.1),
+            theme.colorScheme.primary.withValues(alpha: 0.1),
           ],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -934,7 +935,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
 
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: Colors.blue.withOpacity(0.1),
+            backgroundColor: Colors.blue.withValues(alpha: 0.1),
             child: Icon(_mvtIcon(m.typeMouvement), color: Colors.blue),
           ),
           title: Text(
@@ -1120,9 +1121,9 @@ class _StatutBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         badgeLabel,

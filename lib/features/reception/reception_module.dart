@@ -1503,7 +1503,7 @@ class FactureDetailDialog extends StatelessWidget {
       },
       children: [
         TableRow(
-          decoration: BoxDecoration(color: theme.colorScheme.surfaceVariant),
+          decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest),
           children: const [
             Padding(padding: EdgeInsets.all(8), child: Text('Désignation / N° Inv.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),
             Padding(padding: EdgeInsets.all(8), child: Text('Qté', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11))),

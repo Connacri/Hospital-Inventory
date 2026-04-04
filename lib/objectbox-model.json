@@ -1136,7 +1136,7 @@
     },
     {
       "id": "13:5754123793449760919",
-      "lastPropertyId": "11:5084732360267983898",
+      "lastPropertyId": "12:6906545632312802149",
       "name": "LigneDotationEntity",
       "properties": [
         {
@@ -1198,6 +1198,11 @@
           "id": "11:5084732360267983898",
           "name": "createdAt",
           "type": 10
+        },
+        {
+          "id": "12:6906545632312802149",
+          "name": "articleDesignationHorsCatalogue",
+          "type": 9
         }
       ],
       "relations": []

@@ -53,7 +53,7 @@ class _MainShellState extends State<MainShell> {
         elevation: 0,
       ) : null,
       drawer: !isLarge ? Drawer(
-        backgroundColor: theme.colorScheme.background,
+        backgroundColor: theme.colorScheme.surface,
         child: Column(
           children: [
             const _UserHeader(isDrawer: true),
@@ -78,7 +78,7 @@ class _MainShellState extends State<MainShell> {
                         ),
                       ),
                       selected: isSelected,
-                      selectedTileColor: theme.colorScheme.primary.withOpacity(0.1),
+                      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       onTap: () {
                         setState(() => _selectedIndex = i);
@@ -107,7 +107,7 @@ class _MainShellState extends State<MainShell> {
               decoration: BoxDecoration(
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                   ),
                 ],
@@ -115,7 +115,7 @@ class _MainShellState extends State<MainShell> {
               child: NavigationRail(
                 extended: true,
                 backgroundColor: theme.colorScheme.surface,
-                indicatorColor: theme.colorScheme.primary.withOpacity(0.1),
+                indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                 selectedIndex: _selectedIndex,
                 onDestinationSelected: (i) => setState(() => _selectedIndex = i),
                 leading: const _UserHeader(isDrawer: false),
@@ -150,7 +150,7 @@ class _MainShellState extends State<MainShell> {
             ),
           Expanded(
             child: Container(
-              color: theme.colorScheme.background,
+              color: theme.colorScheme.surface,
               child: _screens[_selectedIndex],
             ),
           ),
@@ -199,7 +199,7 @@ class _UserHeader extends StatelessWidget {
                   ),
                   Text(
                     user.role.toUpperCase(),
-                    style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8), letterSpacing: 1.2),
+                    style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8), letterSpacing: 1.2),
                   ),
                 ],
               ),
@@ -222,7 +222,7 @@ class _UserHeader extends StatelessWidget {
             ),
             child: CircleAvatar(
               radius: 35,
-              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
               child: Text(
                 user.nomComplet[0].toUpperCase(),
                 style: TextStyle(color: theme.colorScheme.primary, fontSize: 28, fontWeight: FontWeight.bold),

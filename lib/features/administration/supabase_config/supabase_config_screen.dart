@@ -5,7 +5,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -317,7 +316,7 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
     return ListView.separated(
       padding: const EdgeInsets.all(24),
       itemCount: configs.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         final config = configs[i];
         return _SavedConfigTile(
@@ -468,6 +467,7 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       context.read<SupabaseConfigService>().deleteConfig(config.id);
     }
   }
@@ -497,6 +497,7 @@ class _SupabaseConfigScreenState extends State<SupabaseConfigScreen>
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       await context.read<SupabaseConfigService>().disableSync();
     }
   }
@@ -520,8 +521,8 @@ class _SupabaseStatusChip extends StatelessWidget {
       ),
       label: Text(isReady ? 'Connecté' : 'Hors-ligne'),
       backgroundColor: isReady
-          ? Colors.green.withOpacity(0.1)
-          : Colors.red.withOpacity(0.1),
+          ? Colors.green.withValues(alpha: 0.1)
+          : Colors.red.withValues(alpha: 0.1),
     );
   }
 }
@@ -543,9 +544,9 @@ class _InfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: c.withOpacity(0.08),
+        color: c.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.withOpacity(0.3)),
+        border: Border.all(color: c.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -554,7 +555,7 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(color: c.withOpacity(0.9), fontSize: 13),
+              style: TextStyle(color: c.withValues(alpha: 0.9), fontSize: 13),
             ),
           ),
         ],
@@ -576,9 +577,9 @@ class _TestResultCard extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
@@ -588,7 +589,7 @@ class _TestResultCard extends StatelessWidget {
             child: Text(
               result.message,
               style: TextStyle(
-                color: color.withOpacity(0.9),
+                color: color.withValues(alpha: 0.9),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -644,8 +645,8 @@ class _MigrationResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       color: result.success
-          ? Colors.green.withOpacity(0.08)
-          : Colors.orange.withOpacity(0.08),
+          ? Colors.green.withValues(alpha: 0.08)
+          : Colors.orange.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
