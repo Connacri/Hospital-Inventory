@@ -25,7 +25,10 @@ import '../../shared/widgets/app_toast.dart';
 
 class BonDotationRepository extends BaseRepository<BonDotationEntity> {
   BonDotationRepository()
-      : super(box: ObjectBoxStore.instance.bonsDotation, tableName: 'bons_dotation');
+    : super(
+        box: ObjectBoxStore.instance.bonsDotation,
+        tableName: 'bons_dotation',
+      );
 
   @override
   BonDotationEntity? getByUuid(String uuid) =>
@@ -62,14 +65,19 @@ class BonDotationRepository extends BaseRepository<BonDotationEntity> {
 
 class LigneDotationRepository extends BaseRepository<LigneDotationEntity> {
   LigneDotationRepository()
-      : super(box: ObjectBoxStore.instance.lignesDotation, tableName: 'lignes_dotation');
+    : super(
+        box: ObjectBoxStore.instance.lignesDotation,
+        tableName: 'lignes_dotation',
+      );
 
   @override
   LigneDotationEntity? getByUuid(String uuid) =>
       box.query(LigneDotationEntity_.uuid.equals(uuid)).build().findFirst();
 
-  List<LigneDotationEntity> getByBon(String bonUuid) =>
-      box.query(LigneDotationEntity_.bonDotationUuid.equals(bonUuid)).build().find();
+  List<LigneDotationEntity> getByBon(String bonUuid) => box
+      .query(LigneDotationEntity_.bonDotationUuid.equals(bonUuid))
+      .build()
+      .find();
 
   @override
   String getUuid(LigneDotationEntity e) => e.uuid;
@@ -118,6 +126,8 @@ class BonDotationProvider extends ChangeNotifier {
   Future<BonDotationEntity> createRequest({
     required String serviceUuid,
     required List<LigneDotationEntity> lignes,
+    String? numeroBd,
+    DateTime? dateDemande,
     String? motif,
     required String createdByUuid,
   }) async {
@@ -126,9 +136,11 @@ class BonDotationProvider extends ChangeNotifier {
 
     final bon = BonDotationEntity()
       ..uuid = const Uuid().v4()
-      ..numeroBd = NumeroGenerator.prochainBonDotation()
+      ..numeroBd = (numeroBd != null && numeroBd.isNotEmpty)
+          ? numeroBd
+          : NumeroGenerator.prochainBonDotation()
       ..serviceDemandeurUuid = serviceUuid
-      ..dateDemande = DateTime.now()
+      ..dateDemande = dateDemande ?? DateTime.now()
       ..dateDotation = DateTime.now()
       ..statut = 'en_attente'
       ..motif = motif
@@ -147,6 +159,54 @@ class BonDotationProvider extends ChangeNotifier {
     return savedBon;
   }
 
+  Future<void> deleteRequest(String uuid) async {
+    final bon = _repo.getByUuid(uuid);
+    if (bon == null) return;
+    
+    final lignes = _ligneRepo.getByBon(uuid);
+    for (var l in lignes) {
+      _store.lignesDotation.remove(l.id);
+    }
+    _store.bonsDotation.remove(bon.id);
+    loadAll();
+  }
+
+  Future<void> updateRequest({
+    required String uuid,
+    required String serviceUuid,
+    required List<LigneDotationEntity> lignes,
+    String? numeroBd,
+    DateTime? dateDemande,
+    String? motif,
+  }) async {
+    final bon = _repo.getByUuid(uuid);
+    if (bon == null) return;
+
+    bon.serviceDemandeurUuid = serviceUuid;
+    bon.numeroBd = numeroBd ?? bon.numeroBd;
+    bon.dateDemande = dateDemande ?? bon.dateDemande;
+    bon.motif = motif;
+    bon.updatedAt = DateTime.now();
+    bon.syncStatus = 'pending_push';
+    await _repo.update(bon);
+
+    // Gérer les lignes : supprimer les anciennes et mettre les nouvelles (approche simple)
+    final anciennesLignes = _ligneRepo.getByBon(uuid);
+    for (var l in anciennesLignes) {
+      if (l.quantiteAttribuee == 0) {
+        _store.lignesDotation.remove(l.id);
+      }
+    }
+
+    for (final l in lignes) {
+      l.bonDotationUuid = uuid;
+      l.quantiteAttribuee = 0;
+      await _ligneRepo.insert(l);
+    }
+
+    loadAll();
+  }
+
   Future<void> validerLigneDotation({
     required String bonUuid,
     required String ligneUuid,
@@ -158,7 +218,10 @@ class BonDotationProvider extends ChangeNotifier {
     if (bon == null || ligne == null) return;
 
     for (final invUuid in inventoryUuids) {
-      final item = _store.articlesInventaire.query(ArticleInventaireEntity_.uuid.equals(invUuid)).build().findFirst();
+      final item = _store.articlesInventaire
+          .query(ArticleInventaireEntity_.uuid.equals(invUuid))
+          .build()
+          .findFirst();
       if (item != null) {
         final oldStatus = item.statut;
         item.statut = 'affecte';
@@ -186,7 +249,10 @@ class BonDotationProvider extends ChangeNotifier {
     ligne.quantiteAttribuee += inventoryUuids.length;
     await _ligneRepo.update(ligne);
 
-    final article = _store.articles.query(ArticleEntity_.uuid.equals(ligne.articleUuid)).build().findFirst();
+    final article = _store.articles
+        .query(ArticleEntity_.uuid.equals(ligne.articleUuid))
+        .build()
+        .findFirst();
     if (article != null) {
       article.stockActuel -= inventoryUuids.length;
       article.updatedAt = DateTime.now();
@@ -196,7 +262,9 @@ class BonDotationProvider extends ChangeNotifier {
 
     // Vérifier si tout est servi
     final toutesLignes = _ligneRepo.getByBon(bonUuid);
-    bool toutServi = toutesLignes.every((l) => l.quantiteAttribuee >= l.quantiteDemandee);
+    bool toutServi = toutesLignes.every(
+      (l) => l.quantiteAttribuee >= l.quantiteDemandee,
+    );
     if (toutServi) {
       bon.statut = 'termine';
     } else {
@@ -252,29 +320,47 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : provider.bons.isEmpty
-              ? _buildEmptyState()
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: provider.bons.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final b = provider.bons[i];
-                    final service = ObjectBoxStore.instance.services
-                        .query(ServiceHopitalEntity_.uuid.equals(b.serviceDemandeurUuid))
-                        .build()
-                        .findFirst();
+          ? _buildEmptyState()
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: provider.bons.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, i) {
+                final b = provider.bons[i];
+                final service = ObjectBoxStore.instance.services
+                    .query(
+                      ServiceHopitalEntity_.uuid.equals(b.serviceDemandeurUuid),
+                    )
+                    .build()
+                    .findFirst();
 
-                    return Card(
-                      child: ListTile(
-                        leading: _StatusBadge(status: b.statut),
-                        title: Text(b.numeroBd, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${service?.libelle ?? "Service inconnu"} • ${fmt.format(b.dateDemande!)}'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _showDetail(b, service),
-                      ),
-                    ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
-                  },
-                ),
+                return Card(
+                  child: ListTile(
+                    leading: _StatusBadge(status: b.statut),
+                    title: Text(
+                      b.numeroBd,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      '${service?.libelle ?? "Service inconnu"} • ${fmt.format(b.dateDemande!)}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (b.statut == 'en_attente')
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => _confirmDelete(context, b),
+                          ),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                    onTap: () => _showDetail(b, service),
+                    onLongPress: () => b.statut == 'en_attente' ? _openEdit(b) : null,
+                  ),
+                ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(context),
         icon: const Icon(Icons.add_task),
@@ -288,7 +374,11 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.assignment_ind_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(
+            Icons.assignment_ind_outlined,
+            size: 64,
+            color: Colors.grey.shade300,
+          ),
           const SizedBox(height: 16),
           const Text('Aucun bon de dotation enregistré'),
         ],
@@ -305,7 +395,38 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
   }
 
   void _showDetail(BonDotationEntity b, ServiceHopitalEntity? s) {
-    showDialog(context: context, builder: (_) => _BonDotationDetailDialog(bon: b, service: s));
+    showDialog(
+      context: context,
+      builder: (_) => _BonDotationDetailDialog(bon: b, service: s),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, BonDotationEntity b) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer la demande ?'),
+        content: Text('Voulez-vous vraiment supprimer le bon ${b.numeroBd} ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () {
+              context.read<BonDotationProvider>().deleteRequest(b.uuid);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openEdit(BonDotationEntity b) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BonDotationFormDialog(editingBon: b),
+    );
   }
 }
 
@@ -346,7 +467,14 @@ class _StatusBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color, size: 16),
-          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );
@@ -358,7 +486,8 @@ class _StatusBadge extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class BonDotationFormDialog extends StatefulWidget {
-  const BonDotationFormDialog({super.key});
+  final BonDotationEntity? editingBon;
+  const BonDotationFormDialog({super.key, this.editingBon});
 
   @override
   State<BonDotationFormDialog> createState() => _BonDotationFormDialogState();
@@ -370,11 +499,43 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
   final List<_LigneRequestModel> _lignes = [];
   final TextEditingController _motif = TextEditingController();
   bool _isSaving = false;
+  DateTime? dateDemande;
+  String? numeroBd;
+  late TextEditingController numeroBdController;
 
   @override
   void initState() {
     super.initState();
-    _addLigne();
+    if (widget.editingBon != null) {
+      numeroBdController = TextEditingController(text: widget.editingBon!.numeroBd);
+      _motif.text = widget.editingBon!.motif ?? '';
+      dateDemande = widget.editingBon!.dateDemande;
+      
+      // Charger le service
+      _selectedService = ObjectBoxStore.instance.services
+          .query(ServiceHopitalEntity_.uuid.equals(widget.editingBon!.serviceDemandeurUuid))
+          .build()
+          .findFirst();
+          
+      // Charger les lignes
+      final lines = ObjectBoxStore.instance.lignesDotation
+          .query(LigneDotationEntity_.bonDotationUuid.equals(widget.editingBon!.uuid))
+          .build()
+          .find();
+          
+      for (var l in lines) {
+        final art = l.articleUuid.isNotEmpty 
+            ? ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(l.articleUuid)).build().findFirst()
+            : null;
+        _lignes.add(_LigneRequestModel()
+          ..article = art
+          ..designationManuelle = l.articleDesignationHorsCatalogue ?? art?.designation ?? ''
+          ..quantite = l.quantiteDemandee);
+      }
+    } else {
+      numeroBdController = TextEditingController();
+      _addLigne();
+    }
   }
 
   void _addLigne() {
@@ -385,6 +546,12 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
     if (_lignes.length > 1) {
       setState(() => _lignes.removeAt(index));
     }
+  }
+
+  @override
+  void dispose() {
+    numeroBdController.dispose();
+    super.dispose();
   }
 
   @override
@@ -404,9 +571,15 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                 children: [
                   const Icon(Icons.add_task),
                   const SizedBox(width: 12),
-                  const Text('Demande de Dotation Service', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Demande de Dotation',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                   const Spacer(),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ],
               ),
             ),
@@ -420,12 +593,43 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                       child: Column(
                         children: [
                           ServiceAutocomplete(
-                            onSelected: (s) => setState(() => _selectedService = s),
+                            onSelected: (s) =>
+                                setState(() => _selectedService = s),
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _motif,
-                            decoration: const InputDecoration(labelText: 'Motif / Observations', prefixIcon: Icon(Icons.comment_outlined)),
+                            decoration: const InputDecoration(
+                              labelText: 'Motif / Observations',
+                              prefixIcon: Icon(Icons.comment_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: TextFormField(
+                                  controller: numeroBdController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'N°',
+                                    prefixIcon: Icon(Icons.numbers),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                flex: 4,
+                                child: DateRequestField(
+                                  initialDate: dateDemande,
+                                  onDateChanged: (newDate) {
+                                    setState(() {
+                                      dateDemande = newDate;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -439,31 +643,59 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                         itemBuilder: (context, i) => Row(
                           children: [
                             Expanded(
-                              flex: 3,
+                              flex: 8,
                               child: ArticleAutocomplete(
                                 initialValue: _lignes[i].article,
-                                onSelected: (a) => setState(() => _lignes[i].article = a),
+                                onSelected: (a) {
+                                  setState(() {
+                                    _lignes[i].article = a;
+                                    _lignes[i].designationManuelle =
+                                        a.designation;
+                                  });
+                                },
+                                onSearchChanged: (text) {
+                                  _lignes[i].designationManuelle = text;
+                                  // Si le texte change et ne correspond plus à l'article sélectionné
+                                  if (_lignes[i].article?.designation != text) {
+                                    _lignes[i].article = null;
+                                  }
+                                },
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 8),
                             Expanded(
+                              flex: 3,
                               child: TextFormField(
-                                decoration: const InputDecoration(labelText: 'Qté'),
+                                decoration: const InputDecoration(
+                                  labelText: 'Qté',
+                                ),
                                 keyboardType: TextInputType.number,
+
                                 initialValue: _lignes[i].quantite.toString(),
-                                onChanged: (v) => _lignes[i].quantite = int.tryParse(v) ?? 1,
+                                onChanged: (v) =>
+                                    _lignes[i].quantite = int.tryParse(v) ?? 1,
                               ),
                             ),
-                            IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _removeLigne(i)),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                              onPressed: () => _removeLigne(i),
+                            ),
                           ],
                         ),
                       ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: TextButton.icon(onPressed: _addLigne, icon: const Icon(Icons.add), label: const Text('Ajouter un article')),
+                      child: TextButton.icon(
+                        onPressed: _addLigne,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Ajouter un article'),
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -474,11 +706,23 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Annuler'),
+                  ),
                   const SizedBox(width: 12),
                   FilledButton.icon(
                     onPressed: _isSaving ? null : _save,
-                    icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send),
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.send),
                     label: const Text('Envoyer la Demande'),
                   ),
                 ],
@@ -497,8 +741,12 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
       return;
     }
     for (final l in _lignes) {
-      if (l.article == null || l.quantite <= 0) {
-        AppToast.show(context, 'Certaines lignes sont incomplètes', isError: true);
+      if (l.designationManuelle.isEmpty || l.quantite <= 0) {
+        AppToast.show(
+          context,
+          'Certaines lignes sont incomplètes',
+          isError: true,
+        );
         return;
       }
     }
@@ -508,21 +756,40 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
     final auth = context.read<AuthProvider>();
 
     try {
-      final lignesEntities = _lignes.map((l) => LigneDotationEntity()
-        ..articleUuid = l.article!.uuid
-        ..quantiteDemandee = l.quantite
-      ).toList();
+      final lignesEntities = _lignes
+          .map(
+            (l) => LigneDotationEntity()
+              ..articleUuid = l.article?.uuid ?? ''
+              ..articleDesignationHorsCatalogue = l.article == null
+                  ? l.designationManuelle
+                  : null
+              ..quantiteDemandee = l.quantite,
+          )
+          .toList();
 
-      await provider.createRequest(
-        serviceUuid: _selectedService!.uuid,
-        lignes: lignesEntities,
-        motif: _motif.text.trim(),
-        createdByUuid: auth.currentUser?.uuid ?? '',
-      );
+      if (widget.editingBon != null) {
+        await provider.updateRequest(
+          uuid: widget.editingBon!.uuid,
+          serviceUuid: _selectedService!.uuid,
+          numeroBd: numeroBdController.text.trim(),
+          dateDemande: dateDemande,
+          lignes: lignesEntities,
+          motif: _motif.text.trim(),
+        );
+      } else {
+        await provider.createRequest(
+          serviceUuid: _selectedService!.uuid,
+          numeroBd: numeroBdController.text.trim(),
+          dateDemande: dateDemande,
+          lignes: lignesEntities,
+          motif: _motif.text.trim(),
+          createdByUuid: auth.currentUser?.uuid ?? '',
+        );
+      }
 
       if (mounted) {
         Navigator.pop(context);
-        AppToast.show(context, 'Demande de dotation créée');
+        AppToast.show(context, widget.editingBon != null ? 'Demande mise à jour' : 'Demande de dotation créée');
       }
     } catch (e) {
       if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
@@ -532,8 +799,66 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
   }
 }
 
+class DateRequestField extends StatefulWidget {
+  final DateTime? initialDate;
+  final ValueChanged<DateTime?> onDateChanged;
+
+  const DateRequestField({
+    super.key,
+    this.initialDate,
+    required this.onDateChanged,
+  });
+
+  @override
+  State<DateRequestField> createState() => _DateRequestFieldState();
+}
+
+class _DateRequestFieldState extends State<DateRequestField> {
+  DateTime? _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.initialDate;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      widget.onDateChanged(picked);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _selectedDate != null
+        ? Chip(
+            deleteIcon: const Icon(Icons.close),
+            onDeleted: () => setState(() => _selectedDate = null),
+            label: Text(
+              "${_selectedDate!.day.toString().padLeft(2, '0')}/"
+              "${_selectedDate!.month.toString().padLeft(2, '0')}/"
+              "${_selectedDate!.year}",
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.blue,
+          )
+        : TextButton(onPressed: _pickDate, child: Text("Date B.D"));
+  }
+}
+
 class _LigneRequestModel {
   ArticleEntity? article;
+  String designationManuelle = '';
   int quantite = 1;
 }
 
@@ -548,7 +873,8 @@ class _BonDotationDetailDialog extends StatefulWidget {
   const _BonDotationDetailDialog({required this.bon, this.service});
 
   @override
-  State<_BonDotationDetailDialog> createState() => _BonDotationDetailDialogState();
+  State<_BonDotationDetailDialog> createState() =>
+      _BonDotationDetailDialogState();
 }
 
 class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
@@ -557,7 +883,10 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
     final theme = Theme.of(context);
     final fmt = DateFormat('dd/MM/yyyy HH:mm');
     final store = ObjectBoxStore.instance;
-    final lignes = store.lignesDotation.query(LigneDotationEntity_.bonDotationUuid.equals(widget.bon.uuid)).build().find();
+    final lignes = store.lignesDotation
+        .query(LigneDotationEntity_.bonDotationUuid.equals(widget.bon.uuid))
+        .build()
+        .find();
 
     return Dialog(
       child: ConstrainedBox(
@@ -574,12 +903,26 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Bon de Dotation ${widget.bon.numeroBd}', style: theme.textTheme.titleLarge),
-                      Text('Statut: ${widget.bon.statut.toUpperCase()}', style: TextStyle(fontSize: 12, color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                       Text(
+                          'Bon de Dotation ${widget.bon.numeroBd}',
+                          style: theme.textTheme.titleMedium,
+                        ),
+
+                      Text(
+                        'Statut: ${widget.bon.statut.toUpperCase()}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                   const Spacer(),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
                 ],
               ),
             ),
@@ -589,19 +932,31 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(child: _DetailRow('Service Dest.', widget.service?.libelle ?? '—')),
-                        Expanded(child: _DetailRow('Date Demande', fmt.format(widget.bon.dateDemande!))),
-                      ],
+                    _DetailRow('Service Dest.', widget.service?.libelle ?? '—'),
+                    _DetailRow(
+                      'Date B/D',
+                      fmt.format(widget.bon.dateDemande),
                     ),
-                    if (widget.bon.motif != null && widget.bon.motif!.isNotEmpty)
+                    _DetailRow(
+                      'Date Demande',
+                      fmt.format(widget.bon.createdAt),
+                    ),
+                    if (widget.bon.motif != null &&
+                        widget.bon.motif!.isNotEmpty)
                       _DetailRow('Motif', widget.bon.motif!),
-                    
+
                     const Divider(height: 48),
-                    Text('LIGNES DE LA DEMANDE', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.secondary, fontWeight: FontWeight.bold)),
+                    Text(
+                      'LIGNES DE LA DEMANDE',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.secondary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 16),
-                    ...lignes.map((l) => _LigneDetailWidget(ligne: l, bon: widget.bon)),
+                    ...lignes.map(
+                      (l) => _LigneDetailWidget(ligne: l, bon: widget.bon),
+                    ),
                   ],
                 ),
               ),
@@ -630,21 +985,60 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final store = ObjectBoxStore.instance;
-    final article = store.articles.query(ArticleEntity_.uuid.equals(widget.ligne.articleUuid)).build().findFirst();
-    final remains = widget.ligne.quantiteDemandee - widget.ligne.quantiteAttribuee;
-    
+    final article = widget.ligne.articleUuid.isNotEmpty
+        ? store.articles
+              .query(ArticleEntity_.uuid.equals(widget.ligne.articleUuid))
+              .build()
+              .findFirst()
+        : null;
+    final designation =
+        article?.designation ??
+        widget.ligne.articleDesignationHorsCatalogue ??
+        'Article inconnu';
+    final remains =
+        widget.ligne.quantiteDemandee - widget.ligne.quantiteAttribuee;
+
     // Items déjà affectés pour cette ligne (via historique ou matching)
     final itemsAffectes = store.articlesInventaire
-        .query(ArticleInventaireEntity_.articleUuid.equals(widget.ligne.articleUuid)
-            .and(ArticleInventaireEntity_.serviceUuid.equals(widget.bon.serviceDemandeurUuid))
-            .and(ArticleInventaireEntity_.statut.equals('affecte')))
+        .query(
+          ArticleInventaireEntity_.articleUuid
+              .equals(widget.ligne.articleUuid)
+              .and(
+                ArticleInventaireEntity_.serviceUuid.equals(
+                  widget.bon.serviceDemandeurUuid,
+                ),
+              )
+              .and(ArticleInventaireEntity_.statut.equals('affecte')),
+        )
         .build()
         .find();
+
+    // Recherche d'articles similaires si l'article n'est pas encore associé
+    List<ArticleEntity> articlesSimilaires = [];
+    if (widget.ligne.articleUuid.isEmpty && widget.ligne.articleDesignationHorsCatalogue != null) {
+      final terms = widget.ligne.articleDesignationHorsCatalogue!.split(' ');
+      
+      // On construit une liste de conditions or
+      Condition<ArticleEntity>? condition;
+      for (final term in terms) {
+        if (term.length > 2) {
+          final c = ArticleEntity_.designation.contains(term, caseSensitive: false);
+          condition = (condition == null) ? c : condition.or(c);
+        }
+      }
+      
+      if (condition != null) {
+        articlesSimilaires = store.articles.query(condition).build().find();
+      }
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 0,
-      shape: RoundedRectangleBorder(side: BorderSide(color: theme.dividerColor), borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -656,50 +1050,129 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(article?.designation ?? 'Article inconnu', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('Demandé: ${widget.ligne.quantiteDemandee} | Servi: ${widget.ligne.quantiteAttribuee}', 
-                        style: TextStyle(color: remains > 0 ? Colors.orange : Colors.green, fontWeight: FontWeight.w500)),
+                      Text(
+                        designation,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Demandé: ${widget.ligne.quantiteDemandee} | Servi: ${widget.ligne.quantiteAttribuee}',
+                        style: TextStyle(
+                          color: remains > 0 ? Colors.orange : Colors.green,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 if (remains > 0)
                   FilledButton.icon(
-                    onPressed: _selectedUuids.isEmpty ? null : _validerAffectation,
-                    icon: _isValidating 
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.check, size: 18),
+                    onPressed: _selectedUuids.isEmpty
+                        ? null
+                        : _validerAffectation,
+                    icon: _isValidating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check, size: 18),
                     label: const Text('Affecter'),
                   ),
               ],
             ),
             if (itemsAffectes.isNotEmpty) ...[
               const SizedBox(height: 12),
-              const Text('Unités déjà affectées:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              const Text(
+                'Unités déjà affectées:',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
-                children: itemsAffectes.map((i) => Chip(
-                  label: Text(i.numeroInventaire, style: const TextStyle(fontSize: 10)),
+                children: itemsAffectes
+                    .map(
+                      (i) => Chip(
+                        label: Text(
+                          i.numeroInventaire,
+                          style: const TextStyle(fontSize: 10),
+                        ),
 
-                  visualDensity: VisualDensity.compact,
-                )).toList(),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    )
+                    .toList(),
               ),
             ],
             if (remains > 0) ...[
               const Divider(height: 24),
-              Text('Sélectionner des unités en stock (max $remains):', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              const SizedBox(height: 8),
-              _InventoryPicker(
-                articleUuid: widget.ligne.articleUuid,
-                selectedUuids: _selectedUuids,
-                onChanged: (uuids) {
-                  if (uuids.length <= remains) {
-                    setState(() => _selectedUuids = uuids);
-                  } else {
-                    AppToast.show(context, 'Quantité max dépassée', isError: true);
-                  }
-                },
-              ),
+              if (widget.ligne.articleUuid.isEmpty) ...[
+                const Text(
+                  'Associer à un article du catalogue pour affecter:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Colors.orange,
+                  ),
+                ),
+                if (articlesSimilaires.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text('Articles similaires trouvés :', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    children: articlesSimilaires.take(3).map((a) => ActionChip(
+                      label: Text(a.designation, style: const TextStyle(fontSize: 10)),
+                      onPressed: () {
+                        setState(() {
+                          widget.ligne.articleUuid = a.uuid;
+                          ObjectBoxStore.instance.lignesDotation.put(widget.ligne);
+                        });
+                      },
+                    )).toList(),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                ArticleAutocomplete(
+                  onSelected: (a) {
+                    setState(() {
+                      widget.ligne.articleUuid = a.uuid;
+                      ObjectBoxStore.instance.lignesDotation.put(widget.ligne);
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (widget.ligne.articleUuid.isNotEmpty) ...[
+                Text(
+                  'Sélectionner des unités en stock (max $remains):',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _InventoryPicker(
+                  articleUuid: widget.ligne.articleUuid,
+                  selectedUuids: _selectedUuids,
+                  onChanged: (uuids) {
+                    if (uuids.length <= remains) {
+                      setState(() => _selectedUuids = uuids);
+                    } else {
+                      AppToast.show(
+                        context,
+                        'Quantité max dépassée',
+                        isError: true,
+                      );
+                    }
+                  },
+                ),
+              ],
             ],
           ],
         ),
@@ -734,24 +1207,42 @@ class _InventoryPicker extends StatelessWidget {
   final List<String> selectedUuids;
   final ValueChanged<List<String>> onChanged;
 
-  const _InventoryPicker({required this.articleUuid, required this.selectedUuids, required this.onChanged});
+  const _InventoryPicker({
+    required this.articleUuid,
+    required this.selectedUuids,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     final store = ObjectBoxStore.instance;
     // Uniquement les articles 'en_stock' ou 'retourne'
     final items = store.articlesInventaire
-        .query(ArticleInventaireEntity_.articleUuid.equals(articleUuid)
-            .and(ArticleInventaireEntity_.statut.equals('en_stock').or(ArticleInventaireEntity_.statut.equals('retourne'))))
+        .query(
+          ArticleInventaireEntity_.articleUuid
+              .equals(articleUuid)
+              .and(
+                ArticleInventaireEntity_.statut
+                    .equals('en_stock')
+                    .or(ArticleInventaireEntity_.statut.equals('retourne')),
+              ),
+        )
         .build()
         .find();
 
-    if (items.isEmpty) return const Text('Aucune unité disponible en stock pour cet article.', style: TextStyle(color: Colors.red, fontSize: 12));
+    if (items.isEmpty)
+      return const Text(
+        'Aucune unité disponible en stock pour cet article.',
+        style: TextStyle(color: Colors.red, fontSize: 12),
+      );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${selectedUuids.length} unité(s) sélectionnée(s)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        Text(
+          '${selectedUuids.length} unité(s) sélectionnée(s)',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -759,12 +1250,17 @@ class _InventoryPicker extends StatelessWidget {
           children: items.map((item) {
             final isSelected = selectedUuids.contains(item.uuid);
             return FilterChip(
-              label: Text(item.numeroInventaire, style: const TextStyle(fontSize: 11)),
+              label: Text(
+                item.numeroInventaire,
+                style: const TextStyle(fontSize: 11),
+              ),
               selected: isSelected,
               onSelected: (v) {
                 final newList = List<String>.from(selectedUuids);
-                if (v) newList.add(item.uuid);
-                else newList.remove(item.uuid);
+                if (v)
+                  newList.add(item.uuid);
+                else
+                  newList.remove(item.uuid);
                 onChanged(newList);
               },
             );
@@ -785,8 +1281,17 @@ class _DetailRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          SizedBox(width: 100, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13))),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
         ],
       ),
     );

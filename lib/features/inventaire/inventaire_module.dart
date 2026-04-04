@@ -3,9 +3,11 @@
 // MODULE INVENTAIRE — Saisie articles, N° auto, serials dynamiques, QR Code
 // ══════════════════════════════════════════════════════════════════════════════
 
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart' hide Barcode;
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -125,9 +127,12 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
         effectueParUuid: createdByUuid,
       );
     }
-    
+
     // Mettre à jour le stock actuel de l'article parent
-    final articleRef = ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(articleUuid)).build().findFirst();
+    final articleRef = ObjectBoxStore.instance.articles
+        .query(ArticleEntity_.uuid.equals(articleUuid))
+        .build()
+        .findFirst();
     if (articleRef != null) {
       articleRef.stockActuel += quantite;
       ObjectBoxStore.instance.articles.put(articleRef);
@@ -212,18 +217,24 @@ class InventaireProvider extends ChangeNotifier {
     loadAll();
   }
 
-  Future<void> updateStatut(ArticleInventaireEntity entity, String newStatut, String userUuid, {String? serviceUuid, String? obs}) async {
+  Future<void> updateStatut(
+    ArticleInventaireEntity entity,
+    String newStatut,
+    String userUuid, {
+    String? serviceUuid,
+    String? obs,
+  }) async {
     final oldStatut = entity.statut;
     final oldService = entity.serviceUuid;
-    
+
     entity.statut = newStatut;
     entity.serviceUuid = serviceUuid ?? entity.serviceUuid;
     entity.observations = obs ?? entity.observations;
     entity.updatedAt = DateTime.now();
     entity.syncStatus = 'pending_push';
-    
+
     await _repo.update(entity);
-    
+
     _repo.logMouvement(
       articleInventaireUuid: entity.uuid,
       type: oldService != serviceUuid ? 'transfert' : 'statut_change',
@@ -233,7 +244,7 @@ class InventaireProvider extends ChangeNotifier {
       serviceDestUuid: serviceUuid,
       effectueParUuid: userUuid,
     );
-    
+
     loadAll();
   }
 
@@ -295,7 +306,9 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
 
   void _notify() {
     widget.onChanged(
-      widget.externalControllers.map((c) => c.text.isEmpty ? null : c.text).toList(),
+      widget.externalControllers
+          .map((c) => c.text.isEmpty ? null : c.text)
+          .toList(),
     );
   }
 
@@ -307,12 +320,21 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: theme.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Row(
             children: [
               const Icon(Icons.inventory_2_outlined, size: 18),
               const SizedBox(width: 8),
-              Expanded(child: Text('${widget.quantite} × ${widget.designation}', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+              Expanded(
+                child: Text(
+                  '${widget.quantite} × ${widget.designation}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
         ),
@@ -320,21 +342,33 @@ class _SerialFieldsGeneratorState extends State<SerialFieldsGenerator> {
         if (!widget.estSerialise)
           _InfoNonSerialise(quantite: widget.quantite)
         else
-          ...List.generate(widget.quantite, (i) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                CircleAvatar(radius: 14, child: Text('${i+1}', style: const TextStyle(fontSize: 10))),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: widget.externalControllers[i],
-                    decoration: InputDecoration(labelText: 'N° Série Article ${i+1}', isDense: true),
+          ...List.generate(
+            widget.quantite,
+            (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    child: Text(
+                      '${i + 1}',
+                      style: const TextStyle(fontSize: 10),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: widget.externalControllers[i],
+                      decoration: InputDecoration(
+                        labelText: 'N° Série Article ${i + 1}',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          )),
+          ),
       ],
     );
   }
@@ -347,8 +381,15 @@ class _InfoNonSerialise extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: Colors.blue.shade200), borderRadius: BorderRadius.circular(8), color: Colors.blue.shade50),
-      child: Text('$quantite N° d\'inventaire seront générés automatiquement sans S/N.', style: TextStyle(color: Colors.blue.shade700, fontSize: 12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.blue.shade200),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.blue.shade50,
+      ),
+      child: Text(
+        '$quantite N° d\'inventaire seront générés automatiquement sans S/N.',
+        style: TextStyle(color: Colors.blue.shade700, fontSize: 12),
+      ),
     );
   }
 }
@@ -367,7 +408,9 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => context.read<InventaireProvider>().loadAll());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => context.read<InventaireProvider>().loadAll(),
+    );
   }
 
   @override
@@ -381,7 +424,17 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
         actions: [
           DropdownButton<String>(
             value: provider._filterStatut,
-            items: ['tous', 'en_stock', 'affecte', 'en_maintenance', 'reforme'].map((s) => DropdownMenuItem(value: s, child: Text(s.replaceAll('_', ' ').toUpperCase(), style: const TextStyle(fontSize: 12)))).toList(),
+            items: ['tous', 'en_stock', 'affecte', 'en_maintenance', 'reforme']
+                .map(
+                  (s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(
+                      s.replaceAll('_', ' ').toUpperCase(),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                )
+                .toList(),
             onChanged: (v) => provider.setFilter(v ?? 'tous'),
           ),
           const SizedBox(width: 16),
@@ -391,14 +444,17 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
         children: [
           _InventaireKpiBarre(articles: provider.articles, store: store),
           Expanded(
-            child: provider.isLoading 
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: provider.articles.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) => _ArticleInventaireTile(article: provider.articles[i], store: store),
-                ),
+            child: provider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: provider.articles.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _ArticleInventaireTile(
+                      article: provider.articles[i],
+                      store: store,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -415,7 +471,10 @@ class _InventaireKpiBarre extends StatelessWidget {
   Widget build(BuildContext context) {
     final enStock = articles.where((a) => a.statut == 'en_stock').length;
     final affecte = articles.where((a) => a.statut == 'affecte').length;
-    final valeur = articles.fold<double>(0, (sum, a) => sum + (a.valeurNetteComptable ?? 0));
+    final valeur = articles.fold<double>(
+      0,
+      (sum, a) => sum + (a.valeurNetteComptable ?? 0),
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -423,10 +482,29 @@ class _InventaireKpiBarre extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _KpiItem(label: 'TOTAL', value: '${articles.length}', icon: Icons.inventory),
-          _KpiItem(label: 'STOCK', value: '$enStock', icon: Icons.warehouse, color: Colors.blue),
-          _KpiItem(label: 'AFFECTÉS', value: '$affecte', icon: Icons.person, color: Colors.green),
-          _KpiItem(label: 'VALEUR', value: '${(valeur/1000).toStringAsFixed(1)}K', icon: Icons.euro, color: Colors.purple),
+          _KpiItem(
+            label: 'TOTAL',
+            value: '${articles.length}',
+            icon: Icons.inventory,
+          ),
+          _KpiItem(
+            label: 'STOCK',
+            value: '$enStock',
+            icon: Icons.warehouse,
+            color: Colors.blue,
+          ),
+          _KpiItem(
+            label: 'AFFECTÉS',
+            value: '$affecte',
+            icon: Icons.person,
+            color: Colors.green,
+          ),
+          _KpiItem(
+            label: 'VALEUR',
+            value: '${(valeur / 1000).toStringAsFixed(1)}K',
+            icon: Icons.euro,
+            color: Colors.purple,
+          ),
         ],
       ),
     );
@@ -437,13 +515,25 @@ class _KpiItem extends StatelessWidget {
   final String label, value;
   final IconData icon;
   final Color? color;
-  const _KpiItem({required this.label, required this.value, required this.icon, this.color});
+  const _KpiItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.color,
+  });
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         Icon(icon, color: color, size: 20),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: color)),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: color,
+          ),
+        ),
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
     );
@@ -458,15 +548,21 @@ class _ArticleInventaireTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = article;
-    final art = store.articles.query(ArticleEntity_.uuid.equals(a.articleUuid)).build().findFirst();
-    final srv = a.serviceUuid != null ? store.services.query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!)).build().findFirst() : null;
+    final art = store.articles
+        .query(ArticleEntity_.uuid.equals(a.articleUuid))
+        .build()
+        .findFirst();
+    final srv = a.serviceUuid != null
+        ? store.services
+              .query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!))
+              .build()
+              .findFirst()
+        : null;
 
     return Card(
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.05),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => showDialog(
@@ -517,7 +613,11 @@ class _ArticleInventaireTile extends StatelessWidget {
                     // Service / localisation
                     Row(
                       children: [
-                        const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                        const Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
@@ -538,11 +638,7 @@ class _ArticleInventaireTile extends StatelessWidget {
               const SizedBox(width: 8),
 
               // Action
-              const Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: Colors.grey,
-              ),
+              const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
             ],
           ),
         ),
@@ -570,10 +666,15 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
         .findFirst();
 
     final mvts = store.historique
-        .query(HistoriqueMouvementEntity_.articleInventaireUuid.equals(article.uuid))
+        .query(
+          HistoriqueMouvementEntity_.articleInventaireUuid.equals(article.uuid),
+        )
         .order(HistoriqueMouvementEntity_.createdAt, flags: Order.descending)
         .build()
         .find();
+
+
+
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -588,7 +689,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
               child: Column(
                 children: [
                   _Header(context, article, art),
-                   _StyledTabBar(),
+                  _StyledTabBar(),
                   Expanded(
                     child: TabBarView(
                       children: [
@@ -608,7 +709,11 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
   }
 
   // ================= HEADER =================
-  Widget _Header(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art) {
+  Widget _Header(
+    BuildContext context,
+    ArticleInventaireEntity a,
+    ArticleEntity? art,
+  ) {
     final theme = Theme.of(context);
 
     return Container(
@@ -624,7 +729,6 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
       ),
       child: Row(
         children: [
-
           // CircleAvatar(
           //   radius: 26,
           //   backgroundColor: theme.colorScheme.primary,
@@ -637,28 +741,26 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _StatutBadge(statut: a.statut),
-               FittedBox(
-                      child: Text(
-                        a.numeroInventaire,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                FittedBox(
+                  child: Text(
+                    a.numeroInventaire,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
 
                 Text(
                   art?.designation ?? 'Article inconnu',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.grey.shade700,
-                    fontSize: 13
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
           ),
-
-
 
           IconButton(
             icon: const Icon(Icons.close),
@@ -682,44 +784,106 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
   }
 
   // ================= INFO =================
-  Widget _buildInfoTab(BuildContext context, ArticleInventaireEntity a, ArticleEntity? art, bool isMobile) {
+  Widget _buildInfoTab(
+    BuildContext context,
+    ArticleInventaireEntity a,
+    ArticleEntity? art,
+    bool isMobile,
+  ) {
     final fmt = DateFormat('dd/MM/yyyy');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: isMobile
           ? Column(
-        children: [
-          _InfoCard(a, fmt),
-          const SizedBox(height: 16),
-          _QrCard(a),
-        ],
-      )
+              children: [
+                _InfoCard(a, fmt),
+                const SizedBox(height: 16),
+                _barCodeCard(a),
+                const SizedBox(height: 16),
+                _QrCard(a),
+              ],
+            )
           : Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _InfoCard(a, fmt)),
-          const SizedBox(width: 20),
-          _QrCard(a),
-        ],
-      ),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 4, child: _InfoCard(a, fmt)),
+                const SizedBox(width: 12),
+
+                Expanded(flex: 2, child: _barCodeCard(a)),
+              ],
+            ),
     );
   }
 
   Widget _InfoCard(ArticleInventaireEntity a, DateFormat fmt) {
+    final store = ObjectBoxStore.instance;
+    final srv = a.serviceUuid != null
+        ? store.services
+        .query(ServiceHopitalEntity_.uuid.equals(a.serviceUuid!))
+        .build()
+        .findFirst()
+        : null;
     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _InfoRow('ID Unique', a.uuid),
+            // _InfoRow('ID Unique', a.uuid),
             _InfoRow('Numéro Série', a.numeroSerieOrigine ?? 'N/A'),
+            _InfoRow('Numéro Inventaire', a.numeroInventaire ?? 'N/A'),
             _InfoRow('État', a.etatPhysique.toUpperCase()),
-            _InfoRow('Mise en service', a.dateMiseService != null ? fmt.format(a.dateMiseService!) : '—'),
-            _InfoRow('Valeur', '${a.valeurAcquisition?.toStringAsFixed(2) ?? "0"} DA'),
-            _InfoRow('VNC', '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA'),
-            _InfoRow('Localisation', a.localisationPrecise ?? 'Non définie'),
+            _InfoRow(
+              'Mise en service',
+              a.dateMiseService != null ? fmt.format(a.dateMiseService!) : '—',
+            ),
+            _InfoRow(
+              'Valeur',
+              '${a.valeurAcquisition?.toStringAsFixed(2) ?? "0"} DA',
+            ),
+            _InfoRow(
+              'VNC',
+              '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA',
+            ),
+           // _InfoRow('Localisation', a.serviceUuid ?? 'Non définie'),
+
+            _InfoRow('Affecté à', srv?.libelle ?? "EN STOCK"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _barCodeCard(ArticleInventaireEntity a) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            BarcodeWidget(
+              barcode: Barcode.code128(), // 🔥 standard robuste
+              data: a.numeroInventaire,
+              width: 400,
+              height: 80,
+            ),
+
+            const SizedBox(height: 8),
+            const Text(
+              'IDENTIFIANT SCANNABLE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.print),
+              label: const Text('Imprimer'),
+            ),
           ],
         ),
       ),
@@ -737,7 +901,11 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               'IDENTIFIANT SCANNABLE',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey,
+              ),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -781,26 +949,62 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
   }
 
   // ================= ACTIONS =================
-  Widget _buildActionsTab(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
+  Widget _buildActionsTab(
+    BuildContext context,
+    ArticleInventaireEntity a,
+    ObjectBoxStore store,
+  ) {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _ActionBtn(label: 'Affecter', icon: Icons.person_add, color: Colors.green, onTap: () => _showTransferDialog(context, a, store)),
-        _ActionBtn(label: 'Maintenance', icon: Icons.build, color: Colors.orange, onTap: () => _quickStatus(context, a, 'en_maintenance')),
-        _ActionBtn(label: 'Perdu / Volé', icon: Icons.report, color: Colors.red, onTap: () => _quickStatus(context, a, 'perdu_vole')),
-        _ActionBtn(label: 'Réformer', icon: Icons.archive, color: Colors.grey, onTap: () => _quickStatus(context, a, 'reforme')),
+        _ActionBtn(
+          label: 'Affecter',
+          icon: Icons.person_add,
+          color: Colors.green,
+          onTap: () => _showTransferDialog(context, a, store),
+        ),
+        _ActionBtn(
+          label: 'Maintenance',
+          icon: Icons.build,
+          color: Colors.orange,
+          onTap: () => _quickStatus(context, a, 'en_maintenance'),
+        ),
+        _ActionBtn(
+          label: 'Perdu / Volé',
+          icon: Icons.report,
+          color: Colors.red,
+          onTap: () => _quickStatus(context, a, 'perdu_vole'),
+        ),
+        _ActionBtn(
+          label: 'Réformer',
+          icon: Icons.archive,
+          color: Colors.grey,
+          onTap: () => _quickStatus(context, a, 'reforme'),
+        ),
       ],
     );
   }
 
   // ================= LOGIC =================
-  void _quickStatus(BuildContext context, ArticleInventaireEntity a, String status) {
+  void _quickStatus(
+    BuildContext context,
+    ArticleInventaireEntity a,
+    String status,
+  ) {
     final user = context.read<AuthProvider>().currentUser;
-    context.read<InventaireProvider>().updateStatut(a, status, user?.uuid ?? '');
+    context.read<InventaireProvider>().updateStatut(
+      a,
+      status,
+      user?.uuid ?? '',
+    );
     Navigator.pop(context);
   }
 
-  void _showTransferDialog(BuildContext context, ArticleInventaireEntity a, ObjectBoxStore store) {
+  void _showTransferDialog(
+    BuildContext context,
+    ArticleInventaireEntity a,
+    ObjectBoxStore store,
+  ) {
     final services = store.services.getAll();
 
     showDialog(
@@ -847,13 +1051,22 @@ class _ActionBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-  const _ActionBtn({required this.label, required this.icon, required this.color, required this.onTap});
+  const _ActionBtn({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16), side: BorderSide(color: color), foregroundColor: color),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.all(16),
+          side: BorderSide(color: color),
+          foregroundColor: color,
+        ),
         onPressed: onTap,
         icon: Icon(icon),
         label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -872,8 +1085,19 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500))),
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
         ],
       ),
     );
@@ -895,8 +1119,19 @@ class _StatutBadge extends StatelessWidget {
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
-      child: Text(badgeLabel, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        badgeLabel,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }

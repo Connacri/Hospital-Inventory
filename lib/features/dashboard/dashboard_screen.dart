@@ -245,6 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  _QuickActionsBar(),  const SizedBox(height: 12),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -476,7 +477,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final store = ObjectBoxStore.instance;
       // Chercher par QR interne ou Numéro d'inventaire
       var invItem = store.articlesInventaire
-          .query(ArticleInventaireEntity_.qrCodeInterne.equals(code))
+          .query(
+          ArticleInventaireEntity_.qrCodeInterne.equals(code) |
+          ArticleInventaireEntity_.numeroSerieOrigine.equals(code) |
+          ArticleInventaireEntity_.numeroInventaire.equals(code)
+      )
           .build()
           .findFirst();
 
@@ -910,19 +915,21 @@ class _KpiCard extends StatelessWidget {
         ],
         border: Border.all(color: color.withValues(alpha: 0.1)),
       ),
-      child: Column(
+      child:
+
+      Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 20),
           ),
-          const Spacer(),
+          Expanded(child: SizedBox()), // <-- Use Expanded here
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(

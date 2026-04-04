@@ -961,6 +961,7 @@ class LigneDotationEntity {
   String bonDotationUuid = '';
 
   String articleUuid = '';
+  String? articleDesignationHorsCatalogue; // Si l'article n'existe pas encore dans le référentiel
   int quantiteDemandee = 1;
   int quantiteAttribuee = 0;
 
@@ -979,6 +980,7 @@ class LigneDotationEntity {
     'uuid': uuid,
     'bon_dotation_uuid': bonDotationUuid,
     'article_uuid': articleUuid,
+    'article_designation_hors_catalogue': articleDesignationHorsCatalogue,
     'quantite_demandee': quantiteDemandee,
     'quantite_attribuee': quantiteAttribuee,
     'is_deleted': isDeleted,

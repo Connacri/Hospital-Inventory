@@ -71,15 +71,18 @@ class _ToastCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Text(
-          message,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+        child: Semantics(
+          liveRegion: true,
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

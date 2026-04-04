@@ -740,12 +740,14 @@ class _CategorieFormDialogState extends State<CategorieFormDialog> with SingleTi
 
 class ArticleAutocomplete extends StatelessWidget {
   final void Function(ArticleEntity) onSelected;
+  final void Function(String)? onSearchChanged;
   final ArticleEntity? initialValue;
   final String? label;
 
   const ArticleAutocomplete({
     super.key,
     required this.onSelected,
+    this.onSearchChanged,
     this.initialValue,
     this.label,
   });
@@ -763,15 +765,19 @@ class ArticleAutocomplete extends StatelessWidget {
         return repo.search(value.text);
       },
       onSelected: onSelected,
-      fieldViewBuilder: (ctx, ctrl, focusNode, _) => TextFormField(
-        controller: ctrl,
-        focusNode: focusNode,
-        decoration: InputDecoration(
-          labelText: label ?? 'Article *',
-          prefixIcon: const Icon(Icons.inventory_2_outlined),
-        ),
-        validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
-      ),
+      fieldViewBuilder: (ctx, ctrl, focusNode, _) {
+        if (onSearchChanged != null) {
+          ctrl.addListener(() => onSearchChanged!(ctrl.text));
+        }
+        return TextFormField(
+          controller: ctrl,
+          focusNode: focusNode,
+          decoration: InputDecoration(
+            labelText: label ?? 'Article (Catalogue ou Manuel) *',
+          ),
+          validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+        );
+      },
       optionsViewBuilder: (ctx, onSelected, options) => Align(
         alignment: Alignment.topLeft,
         child: Material(
