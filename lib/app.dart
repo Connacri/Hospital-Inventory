@@ -36,8 +36,7 @@ class HopitalInventaireApp extends StatelessWidget {
       seedColor: primaryGreen,
       primary: primaryGreen,
       secondary: secondaryGreen,
-      surface: surfaceWhite,
-      background: backgroundLight,
+      surface: backgroundLight,
       onPrimary: Colors.white,
       onSurface: textDark,
       error: errorRed,
@@ -108,7 +107,7 @@ class HopitalInventaireApp extends StatelessWidget {
             color: surfaceWhite,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: primaryGreen.withOpacity(0.1), width: 1),
+              side: BorderSide(color: primaryGreen.withValues(alpha: 0.1), width: 1),
             ),
           ),
 
@@ -118,17 +117,17 @@ class HopitalInventaireApp extends StatelessWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: primaryGreen.withOpacity(0.2)),
+              borderSide: BorderSide(color: primaryGreen.withValues(alpha: 0.2)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: primaryGreen.withOpacity(0.1)),
+              borderSide: BorderSide(color: primaryGreen.withValues(alpha: 0.1)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: primaryGreen, width: 2),
             ),
-            labelStyle: GoogleFonts.inter(fontSize: 14, color: textDark.withOpacity(0.7)),
+            labelStyle: GoogleFonts.inter(fontSize: 14, color: textDark.withValues(alpha: 0.7)),
           ),
 
           filledButtonTheme: FilledButtonThemeData(
@@ -148,7 +147,7 @@ class HopitalInventaireApp extends StatelessWidget {
 }
 
 class _RootNavigator extends StatefulWidget {
-  const _RootNavigator({super.key});
+  const _RootNavigator();
 
   @override
   State<_RootNavigator> createState() => _RootNavigatorState();

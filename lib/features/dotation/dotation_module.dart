@@ -37,7 +37,7 @@ class BonDotationRepository extends BaseRepository<BonDotationEntity> {
   @override
   List<BonDotationEntity> getAll() => box
       .query(BonDotationEntity_.isDeleted.equals(false))
-      .order(BonDotationEntity_.dateDemande, flags: Order.descending)
+      .order(BonDotationEntity_.createdAt, flags: Order.descending)
       .build()
       .find();
 
@@ -141,7 +141,6 @@ class BonDotationProvider extends ChangeNotifier {
           : NumeroGenerator.prochainBonDotation()
       ..serviceDemandeurUuid = serviceUuid
       ..dateDemande = dateDemande ?? DateTime.now()
-      ..dateDotation = DateTime.now()
       ..statut = 'en_attente'
       ..motif = motif
       ..createdByUuid = createdByUuid;
@@ -162,7 +161,7 @@ class BonDotationProvider extends ChangeNotifier {
   Future<void> deleteRequest(String uuid) async {
     final bon = _repo.getByUuid(uuid);
     if (bon == null) return;
-    
+
     final lignes = _ligneRepo.getByBon(uuid);
     for (var l in lignes) {
       _store.lignesDotation.remove(l.id);
@@ -347,16 +346,30 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (b.statut == 'en_attente')
+                        if (b.statut == 'en_attente') ...[
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                            onPressed: () => _confirmDelete(context, b),
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: Colors.blue,
+                              size: 20,
+                            ),
+                            onPressed: () => _openEdit(b),
+                            tooltip: 'Modifier',
                           ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 20,
+                            ),
+                            onPressed: () => _confirmDelete(context, b),
+                            tooltip: 'Supprimer',
+                          ),
+                        ],
                         const Icon(Icons.chevron_right),
                       ],
                     ),
                     onTap: () => _showDetail(b, service),
-                    onLongPress: () => b.statut == 'en_attente' ? _openEdit(b) : null,
                   ),
                 ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
               },
@@ -401,6 +414,14 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
     );
   }
 
+  void _openEdit(BonDotationEntity b) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => BonDotationFormDialog(editingBon: b),
+    );
+  }
+
   void _confirmDelete(BuildContext context, BonDotationEntity b) {
     showDialog(
       context: context,
@@ -408,7 +429,10 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
         title: const Text('Supprimer la demande ?'),
         content: Text('Voulez-vous vraiment supprimer le bon ${b.numeroBd} ?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
           TextButton(
             onPressed: () {
               context.read<BonDotationProvider>().deleteRequest(b.uuid);
@@ -418,14 +442,6 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  void _openEdit(BonDotationEntity b) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => BonDotationFormDialog(editingBon: b),
     );
   }
 }
@@ -510,30 +526,36 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
       numeroBdController = TextEditingController(text: widget.editingBon!.numeroBd);
       _motif.text = widget.editingBon!.motif ?? '';
       dateDemande = widget.editingBon!.dateDemande;
-      
+
       // Charger le service
       _selectedService = ObjectBoxStore.instance.services
           .query(ServiceHopitalEntity_.uuid.equals(widget.editingBon!.serviceDemandeurUuid))
           .build()
           .findFirst();
-          
+
       // Charger les lignes
       final lines = ObjectBoxStore.instance.lignesDotation
           .query(LigneDotationEntity_.bonDotationUuid.equals(widget.editingBon!.uuid))
           .build()
           .find();
-          
+
       for (var l in lines) {
-        final art = l.articleUuid.isNotEmpty 
-            ? ObjectBoxStore.instance.articles.query(ArticleEntity_.uuid.equals(l.articleUuid)).build().findFirst()
+        final art = l.articleUuid.isNotEmpty
+            ? ObjectBoxStore.instance.articles
+                .query(ArticleEntity_.uuid.equals(l.articleUuid))
+                .build()
+                .findFirst()
             : null;
-        _lignes.add(_LigneRequestModel()
-          ..article = art
-          ..designationManuelle = l.articleDesignationHorsCatalogue ?? art?.designation ?? ''
-          ..quantite = l.quantiteDemandee);
+        _lignes.add(
+          _LigneRequestModel()
+            ..article = art
+            ..designationManuelle = l.articleDesignationHorsCatalogue ?? art?.designation ?? ''
+            ..quantite = l.quantiteDemandee,
+        );
       }
     } else {
       numeroBdController = TextEditingController();
+      dateDemande = DateTime.now(); // Date du jour par défaut
       _addLigne();
     }
   }
@@ -593,6 +615,7 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                       child: Column(
                         children: [
                           ServiceAutocomplete(
+                            initialValue: _selectedService,
                             onSelected: (s) =>
                                 setState(() => _selectedService = s),
                           ),
@@ -608,25 +631,24 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                           Row(
                             children: [
                               Expanded(
-                                flex: 5,
+                                flex: 6,
                                 child: TextFormField(
                                   controller: numeroBdController,
                                   decoration: const InputDecoration(
-                                    labelText: 'N°',
+                                    labelText: 'N° de Bon',
+                                    hintText: 'Ex: BD-2025-001',
                                     prefixIcon: Icon(Icons.numbers),
+                                    helperText: 'Laissez vide pour auto-générer',
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
-                                flex: 4,
-                                child: DateRequestField(
-                                  initialDate: dateDemande,
-                                  onDateChanged: (newDate) {
-                                    setState(() {
-                                      dateDemande = newDate;
-                                    });
-                                  },
+                                flex: 5,
+                                child: _DatePickerField(
+                                  label: 'Date du Bon',
+                                  selectedDate: dateDemande,
+                                  onChanged: (d) => setState(() => dateDemande = d),
                                 ),
                               ),
                             ],
@@ -646,19 +668,21 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
                               flex: 8,
                               child: ArticleAutocomplete(
                                 initialValue: _lignes[i].article,
+                                initialText: _lignes[i].designationManuelle,
                                 onSelected: (a) {
                                   setState(() {
                                     _lignes[i].article = a;
-                                    _lignes[i].designationManuelle =
-                                        a.designation;
+                                    _lignes[i].designationManuelle = a.designation;
                                   });
                                 },
                                 onSearchChanged: (text) {
-                                  _lignes[i].designationManuelle = text;
-                                  // Si le texte change et ne correspond plus à l'article sélectionné
-                                  if (_lignes[i].article?.designation != text) {
-                                    _lignes[i].article = null;
-                                  }
+                                  setState(() {
+                                    _lignes[i].designationManuelle = text;
+                                    // Si on modifie le texte, on perd le lien avec l'article du catalogue
+                                    if (_lignes[i].article?.designation != text) {
+                                      _lignes[i].article = null;
+                                    }
+                                  });
                                 },
                               ),
                             ),
@@ -735,6 +759,9 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
   }
 
   Future<void> _save() async {
+    // Forcer la fermeture du clavier pour valider les champs
+    FocusScope.of(context).unfocus();
+    
     if (!_formKey.currentState!.validate()) return;
     if (_selectedService == null) {
       AppToast.show(context, 'Sélectionnez un service', isError: true);
@@ -756,23 +783,36 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
     final auth = context.read<AuthProvider>();
 
     try {
-      final lignesEntities = _lignes
-          .map(
-            (l) => LigneDotationEntity()
-              ..articleUuid = l.article?.uuid ?? ''
-              ..articleDesignationHorsCatalogue = l.article == null
-                  ? l.designationManuelle
-                  : null
-              ..quantiteDemandee = l.quantite,
-          )
-          .toList();
+      final lignesEntities = _lignes.map((l) {
+        final entity = LigneDotationEntity()
+          ..uuid = const Uuid().v4()
+          ..articleUuid = l.article?.uuid ?? ''
+          ..quantiteDemandee = l.quantite
+          ..quantiteAttribuee = 0;
+
+        // SECURITE ABSOLUE:
+        if (l.article == null || entity.articleUuid.isEmpty) {
+          entity.articleUuid = ''; // On s'assure que c'est bien vide
+          entity.articleDesignationHorsCatalogue = l.designationManuelle.trim();
+        } else {
+          // Si on a un article, on peut quand même garder la désignation 
+          // au cas où l'article serait supprimé du catalogue plus tard
+          entity.articleDesignationHorsCatalogue = l.article!.designation;
+        }
+
+        if (entity.articleDesignationHorsCatalogue == null || entity.articleDesignationHorsCatalogue!.isEmpty) {
+           entity.articleDesignationHorsCatalogue = "Article sans nom";
+        }
+
+        return entity;
+      }).toList();
 
       if (widget.editingBon != null) {
         await provider.updateRequest(
           uuid: widget.editingBon!.uuid,
           serviceUuid: _selectedService!.uuid,
           numeroBd: numeroBdController.text.trim(),
-          dateDemande: dateDemande,
+          dateDemande: dateDemande ?? DateTime.now(),
           lignes: lignesEntities,
           motif: _motif.text.trim(),
         );
@@ -780,16 +820,21 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
         await provider.createRequest(
           serviceUuid: _selectedService!.uuid,
           numeroBd: numeroBdController.text.trim(),
-          dateDemande: dateDemande,
+          dateDemande: dateDemande ?? DateTime.now(),
           lignes: lignesEntities,
           motif: _motif.text.trim(),
-          createdByUuid: auth.currentUser?.uuid ?? '',
+          createdByUuid: auth.currentUser?.uuid ?? 'system',
         );
       }
 
       if (mounted) {
         Navigator.pop(context);
-        AppToast.show(context, widget.editingBon != null ? 'Demande mise à jour' : 'Demande de dotation créée');
+        AppToast.show(
+          context,
+          widget.editingBon != null
+              ? 'Demande mise à jour'
+              : 'Demande de dotation créée avec succès',
+        );
       }
     } catch (e) {
       if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
@@ -799,60 +844,42 @@ class _BonDotationFormDialogState extends State<BonDotationFormDialog> {
   }
 }
 
-class DateRequestField extends StatefulWidget {
-  final DateTime? initialDate;
-  final ValueChanged<DateTime?> onDateChanged;
+class _DatePickerField extends StatelessWidget {
+  final String label;
+  final DateTime? selectedDate;
+  final ValueChanged<DateTime> onChanged;
 
-  const DateRequestField({
-    super.key,
-    this.initialDate,
-    required this.onDateChanged,
+  const _DatePickerField({
+    required this.label,
+    required this.selectedDate,
+    required this.onChanged,
   });
 
   @override
-  State<DateRequestField> createState() => _DateRequestFieldState();
-}
-
-class _DateRequestFieldState extends State<DateRequestField> {
-  DateTime? _selectedDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDate = widget.initialDate;
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-      widget.onDateChanged(picked);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return _selectedDate != null
-        ? Chip(
-            deleteIcon: const Icon(Icons.close),
-            onDeleted: () => setState(() => _selectedDate = null),
-            label: Text(
-              "${_selectedDate!.day.toString().padLeft(2, '0')}/"
-              "${_selectedDate!.month.toString().padLeft(2, '0')}/"
-              "${_selectedDate!.year}",
-              style: const TextStyle(color: Colors.white),
-            ),
-            backgroundColor: Colors.blue,
-          )
-        : TextButton(onPressed: _pickDate, child: Text("Date B.D"));
+    final fmt = DateFormat('dd/MM/yyyy');
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: selectedDate ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2100),
+        );
+        if (picked != null) onChanged(picked);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: const Icon(Icons.calendar_today),
+          border: const OutlineInputBorder(),
+        ),
+        child: Text(
+          selectedDate != null ? fmt.format(selectedDate!) : 'Choisir...',
+          style: const TextStyle(fontSize: 14),
+        ),
+      ),
+    );
   }
 }
 
@@ -860,6 +887,8 @@ class _LigneRequestModel {
   ArticleEntity? article;
   String designationManuelle = '';
   int quantite = 1;
+
+  _LigneRequestModel({this.article, this.designationManuelle = '', this.quantite = 1});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -903,10 +932,10 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                       Text(
-                          'Bon de Dotation ${widget.bon.numeroBd}',
-                          style: theme.textTheme.titleMedium,
-                        ),
+                      Text(
+                        'Bon de Dotation ${widget.bon.numeroBd}',
+                        style: theme.textTheme.titleMedium,
+                      ),
 
                       Text(
                         'Statut: ${widget.bon.statut.toUpperCase()}',
@@ -933,10 +962,7 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _DetailRow('Service Dest.', widget.service?.libelle ?? '—'),
-                    _DetailRow(
-                      'Date B/D',
-                      fmt.format(widget.bon.dateDemande),
-                    ),
+                    _DetailRow('Date B/D', fmt.format(widget.bon.dateDemande)),
                     _DetailRow(
                       'Date Demande',
                       fmt.format(widget.bon.createdAt),
@@ -991,42 +1017,56 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
               .build()
               .findFirst()
         : null;
-    final designation =
-        article?.designation ??
-        widget.ligne.articleDesignationHorsCatalogue ??
-        'Article inconnu';
-    final remains =
-        widget.ligne.quantiteDemandee - widget.ligne.quantiteAttribuee;
 
-    // Items déjà affectés pour cette ligne (via historique ou matching)
-    final itemsAffectes = store.articlesInventaire
-        .query(
-          ArticleInventaireEntity_.articleUuid
-              .equals(widget.ligne.articleUuid)
-              .and(
-                ArticleInventaireEntity_.serviceUuid.equals(
-                  widget.bon.serviceDemandeurUuid,
-                ),
-              )
-              .and(ArticleInventaireEntity_.statut.equals('affecte')),
-        )
-        .build()
-        .find();
+    // Logique d'affichage ultra-robuste
+    String designation = 'Article inconnu';
+    
+    // 1. On vérifie d'abord le champ hors-catalogue
+    if (widget.ligne.articleDesignationHorsCatalogue != null && 
+        widget.ligne.articleDesignationHorsCatalogue!.trim().isNotEmpty) {
+      designation = widget.ligne.articleDesignationHorsCatalogue!.trim();
+    } 
+    // 2. Sinon on cherche via l'article lié
+    else if (article != null) {
+      designation = article.designation;
+    } 
+    // 3. Cas critique: si on a un UUID mais pas d'objet article chargé (rare)
+    else if (widget.ligne.articleUuid.isNotEmpty) {
+      designation = "Article Réf. ${widget.ligne.articleUuid.substring(0,8)}";
+    }
+    final remains = widget.ligne.quantiteDemandee - widget.ligne.quantiteAttribuee;
+
+    // Items déjà affectés pour cette ligne
+    // Si la ligne est liée à un article, on cherche les affectations pour cet article dans ce service
+    final itemsAffectes = widget.ligne.articleUuid.isNotEmpty
+        ? store.articlesInventaire
+            .query(
+              ArticleInventaireEntity_.articleUuid.equals(widget.ligne.articleUuid).and(
+                    ArticleInventaireEntity_.serviceUuid.equals(widget.bon.serviceDemandeurUuid),
+                  ).and(ArticleInventaireEntity_.statut.equals('affecte')),
+            )
+            .build()
+            .find()
+        : <ArticleInventaireEntity>[];
 
     // Recherche d'articles similaires si l'article n'est pas encore associé
     List<ArticleEntity> articlesSimilaires = [];
-    if (widget.ligne.articleUuid.isEmpty && widget.ligne.articleDesignationHorsCatalogue != null) {
+    if (widget.ligne.articleUuid.isEmpty &&
+        widget.ligne.articleDesignationHorsCatalogue != null) {
       final terms = widget.ligne.articleDesignationHorsCatalogue!.split(' ');
-      
+
       // On construit une liste de conditions or
       Condition<ArticleEntity>? condition;
       for (final term in terms) {
         if (term.length > 2) {
-          final c = ArticleEntity_.designation.contains(term, caseSensitive: false);
+          final c = ArticleEntity_.designation.contains(
+            term,
+            caseSensitive: false,
+          );
           condition = (condition == null) ? c : condition.or(c);
         }
       }
-      
+
       if (condition != null) {
         articlesSimilaires = store.articles.query(condition).build().find();
       }
@@ -1057,10 +1097,57 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                           fontSize: 16,
                         ),
                       ),
+                      if (widget.ligne.articleUuid.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: Colors.orange),
+                                ),
+                                child: const Text(
+                                  'HORS-CATALOGUE',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _convertirEnArticleOfficiel,
+                                icon: const Icon(Icons.add_business_outlined, size: 14),
+                                label: const Text('Convertir en Article Officiel', style: TextStyle(fontSize: 10)),
+                                style: TextButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  foregroundColor: Colors.blueGrey,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       Text(
                         'Demandé: ${widget.ligne.quantiteDemandee} | Servi: ${widget.ligne.quantiteAttribuee}',
                         style: TextStyle(
-                          color: remains > 0 ? Colors.orange : Colors.green,
+                          color: remains > 0
+                              ? (widget.ligne.quantiteAttribuee > 0
+                                    ? Colors.orange
+                                    : Colors.blue)
+                              : Colors.green,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1122,19 +1209,32 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                 ),
                 if (articlesSimilaires.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  const Text('Articles similaires trouvés :', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                  const Text(
+                    'Articles similaires trouvés :',
+                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 8,
-                    children: articlesSimilaires.take(3).map((a) => ActionChip(
-                      label: Text(a.designation, style: const TextStyle(fontSize: 10)),
-                      onPressed: () {
-                        setState(() {
-                          widget.ligne.articleUuid = a.uuid;
-                          ObjectBoxStore.instance.lignesDotation.put(widget.ligne);
-                        });
-                      },
-                    )).toList(),
+                    children: articlesSimilaires
+                        .take(3)
+                        .map(
+                          (a) => ActionChip(
+                            label: Text(
+                              a.designation,
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                widget.ligne.articleUuid = a.uuid;
+                                ObjectBoxStore.instance.lignesDotation.put(
+                                  widget.ligne,
+                                );
+                              });
+                            },
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -1198,6 +1298,91 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
       if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isValidating = false);
+    }
+  }
+
+  Future<void> _convertirEnArticleOfficiel() async {
+    final designation = widget.ligne.articleDesignationHorsCatalogue ?? '';
+    final result = await showDialog<ArticleEntity>(
+      context: context,
+      builder: (ctx) => _QuickCreateArticleDialog(initialDesignation: designation),
+    );
+
+    if (result != null) {
+      setState(() {
+        widget.ligne.articleUuid = result.uuid;
+        widget.ligne.articleDesignationHorsCatalogue = null;
+        ObjectBoxStore.instance.lignesDotation.put(widget.ligne);
+      });
+      if (mounted) AppToast.show(context, 'Article créé et lié avec succès');
+    }
+  }
+}
+
+class _QuickCreateArticleDialog extends StatefulWidget {
+  final String initialDesignation;
+  const _QuickCreateArticleDialog({required this.initialDesignation});
+
+  @override
+  State<_QuickCreateArticleDialog> createState() => _QuickCreateArticleDialogState();
+}
+
+class _QuickCreateArticleDialogState extends State<_QuickCreateArticleDialog> {
+  late TextEditingController _name;
+  CategorieArticleEntity? _selectedCat;
+  List<CategorieArticleEntity> _categories = [];
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.initialDesignation);
+    _categories = ObjectBoxStore.instance.categories.getAll();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Convertir en Article Officiel'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(labelText: 'Désignation Officielle'),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<CategorieArticleEntity>(
+            value: _selectedCat,
+            decoration: const InputDecoration(labelText: 'Catégorie'),
+            items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c.libelle))).toList(),
+            onChanged: (v) => setState(() => _selectedCat = v),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        FilledButton(
+          onPressed: _isSaving || _selectedCat == null ? null : _save,
+          child: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Créer l\'Article'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      final repo = ArticleRepository();
+      final art = await repo.create(
+        designation: _name.text.trim(),
+        categorieUuid: _selectedCat!.uuid,
+      );
+      if (mounted) Navigator.pop(context, art);
+    } catch (e) {
+      if (mounted) AppToast.show(context, 'Erreur: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 }
@@ -1279,7 +1464,7 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Wrap(
         children: [
           SizedBox(
             width: 100,

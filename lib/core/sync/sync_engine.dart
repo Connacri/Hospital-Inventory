@@ -338,7 +338,6 @@ class PullMerger {
   }
 
   static void _mergeArticleFournisseur(Map<String, dynamic> row) {
-    final uuid = row['uuid'] as String;
     final articleUuid = row['article_uuid'] as String;
     final fournisseurUuid = row['fournisseur_uuid'] as String;
     final isDeleted = row['is_deleted'] as bool? ?? false;
@@ -369,8 +368,6 @@ class PullMerger {
     required T? Function(String uuid) query,
     required T Function(Map<String, dynamic>) fromMap,
   }) {
-    final uuid = row['uuid'] as String;
-    final existing = query(uuid);
     box.put(fromMap(row));
   }
 

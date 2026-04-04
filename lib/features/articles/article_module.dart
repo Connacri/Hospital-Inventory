@@ -742,6 +742,7 @@ class ArticleAutocomplete extends StatelessWidget {
   final void Function(ArticleEntity) onSelected;
   final void Function(String)? onSearchChanged;
   final ArticleEntity? initialValue;
+  final String? initialText; // Nouveau: pour afficher le nom hors-catalogue
   final String? label;
 
   const ArticleAutocomplete({
@@ -749,6 +750,7 @@ class ArticleAutocomplete extends StatelessWidget {
     required this.onSelected,
     this.onSearchChanged,
     this.initialValue,
+    this.initialText,
     this.label,
   });
 
@@ -757,25 +759,30 @@ class ArticleAutocomplete extends StatelessWidget {
     final repo = ArticleRepository();
     final theme = Theme.of(context);
     
+    // On priorise l'article du catalogue, sinon le texte manuel fourni
+    final startText = initialValue?.designation ?? initialText ?? '';
+    
     return Autocomplete<ArticleEntity>(
-      initialValue: TextEditingValue(text: initialValue?.designation ?? ''),
+      initialValue: TextEditingValue(text: startText),
       displayStringForOption: (a) => '${a.codeArticle} — ${a.designation}',
       optionsBuilder: (value) {
         if (value.text.isEmpty) return repo.getAll().take(10);
         return repo.search(value.text);
       },
       onSelected: onSelected,
-      fieldViewBuilder: (ctx, ctrl, focusNode, _) {
-        if (onSearchChanged != null) {
-          ctrl.addListener(() => onSearchChanged!(ctrl.text));
-        }
+      fieldViewBuilder: (ctx, ctrl, focusNode, onFieldSubmitted) {
+        // Correction de la gestion du listener pour éviter les doublons
         return TextFormField(
           controller: ctrl,
           focusNode: focusNode,
+          onChanged: (val) {
+            if (onSearchChanged != null) onSearchChanged!(val);
+          },
           decoration: InputDecoration(
             labelText: label ?? 'Article (Catalogue ou Manuel) *',
           ),
           validator: (v) => v == null || v.isEmpty ? 'Requis' : null,
+          onFieldSubmitted: (v) => onFieldSubmitted(),
         );
       },
       optionsViewBuilder: (ctx, onSelected, options) => Align(

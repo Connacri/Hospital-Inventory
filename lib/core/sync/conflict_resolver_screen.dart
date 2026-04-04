@@ -6,10 +6,8 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../objectbox/entities.dart';
-import '../objectbox/objectbox_store.dart';
 import 'sync_engine.dart';
 import '../../shared/widgets/app_toast.dart';
 
@@ -90,7 +88,7 @@ class ConflictListScreen extends StatelessWidget {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: pending.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, index) => const SizedBox(height: 8),
               itemBuilder: (context, i) => _ConflictTile(
                 conflict: pending[i],
                 onResolve: () => Navigator.push(
@@ -380,7 +378,7 @@ class _ConflictInfoBanner extends StatelessWidget {
           ),
           _InfoChip(
             icon: Icons.fingerprint,
-            label: conflict.recordUuid.substring(0, 8) + '...',
+            label: '${conflict.recordUuid.substring(0, 8)}...',
           ),
           _InfoChip(
             icon: Icons.access_time,
@@ -432,7 +430,7 @@ class _DiffTable extends StatelessWidget {
           // En-tête
           TableRow(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
             ),
             children: const [
               _TableHeader('Champ'),

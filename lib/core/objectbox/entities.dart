@@ -381,7 +381,8 @@ class ArticleEntity {
     'designation': designation,
     'description': description,
     'categorie_uuid': categorieUuid,
-    'fournisseur_uuid': fournisseurUuid,
+    // ignore: deprecated_member_use_from_same_package
+    'fournisseur_uuid': fournisseurUuid ?? (fournisseurs.isNotEmpty ? fournisseurs.first.uuid : null),
     'made_in': madeIn,
     'unite_mesure': uniteMesure,
     'code_gtin': codeGtin,
@@ -404,6 +405,7 @@ class ArticleEntity {
       ..designation = m['designation'] ?? ''
       ..description = m['description']
       ..categorieUuid = m['categorie_uuid']
+      // ignore: deprecated_member_use_from_same_package
       ..fournisseurUuid = m['fournisseur_uuid']
       ..madeIn = m['made_in']
       ..uniteMesure = m['unite_mesure'] ?? 'unité'
