@@ -68,6 +68,17 @@ class _MainShellState extends State<MainShell> {
     }
 
     final installDate = DateTime.parse(prefs.getString(key)!);
+    
+    // Cas spécial pour le test (5 minutes)
+    if (user?.matricule == 'tester') {
+      final diffMinutes = now.difference(installDate).inMinutes;
+      if (diffMinutes >= 5) {
+        setState(() => _isExpired = true);
+        if (mounted) _showExpiredDialog();
+      }
+      return;
+    }
+
     final difference = now.difference(installDate).inDays;
 
     if (difference >= 7) {
@@ -87,6 +98,7 @@ class _MainShellState extends State<MainShell> {
             icon: const Icon(Icons.timer_off_outlined, size: 48, color: Colors.red),
             title: const Text('Période de test expirée', textAlign: TextAlign.center),
             content: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(chuHeader, 
@@ -103,12 +115,25 @@ class _MainShellState extends State<MainShell> {
               ],
             ),
             actions: [
-              FilledButton.icon(
-                onPressed: () => launchUrl(Uri.parse('tel:+213696410953')),
-                icon: const Icon(Icons.phone),
-                label: const Text('Appeler Ramzi'),
-              ),
-            ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    context.read<AuthProvider>().logout();
+                  },
+                  child: const Text('Logout'),
+                ),
+
+                FilledButton.icon(
+                  onPressed: () => launchUrl(Uri.parse('tel:+213696410953')),
+                  icon: const Icon(Icons.phone),
+                  label: const Text('Appeler Ramzi'),
+                ),
+              ],
+            ),
+          ],
           ),
         ),
       ),
@@ -259,7 +284,8 @@ class _UserHeader extends StatelessWidget {
     final user = context.watch<AuthProvider>().currentUser;
     if (user == null) return const SizedBox.shrink();
 
-    final isBeta = user.matricule != 'admin';
+    final isBeta = user.matricule != 'admin' && user.matricule != 'tester';
+    final isTest = user.matricule == 'tester';
 
     return FutureBuilder<SharedPreferences>(
       future: SharedPreferences.getInstance(),
@@ -271,46 +297,53 @@ class _UserHeader extends StatelessWidget {
 
         final installDate = DateTime.parse(installStr);
         final diff = now.difference(installDate);
-        final daysLeft = 7 - diff.inDays;
+        
+        // Calcul pour le test vs réel
+        final timeLeft = isTest ? 5 - diff.inMinutes : 7 - diff.inDays;
+        final totalDuration = isTest ? 5 : 7;
+        final label = isTest ? 'LICENCE TEST (5 MIN)' : (isBeta ? 'LICENCE BÊTA' : 'PREMIUM 1 POSTE');
+        final unit = isTest ? 'min' : 'jour(s)';
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isBeta ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+            color: (isBeta || isTest) ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isBeta ? Colors.orange.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+            border: Border.all(color: (isBeta || isTest) ? Colors.orange.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
           ),
           child: Column(
             children: [
               Row(
                 children: [
-                  Icon(isBeta ? Icons.biotech : Icons.verified_user, 
-                    size: 16, color: isBeta ? Colors.orange : Colors.green),
+                  Icon(isBeta || isTest ? Icons.biotech : Icons.verified_user, 
+                    size: 16, color: isBeta || isTest ? Colors.orange : Colors.green),
                   const SizedBox(width: 8),
-                  Text(
-                    isBeta ? 'LICENCE BÊTA' : 'PREMIUM 1 POSTE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: isBeta ? Colors.orange.shade900 : Colors.green.shade900,
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        color: (isBeta || isTest) ? Colors.orange.shade900 : Colors.green.shade900,
+                      ),
                     ),
                   ),
                 ],
               ),
-              if (!isBeta) ...[
+              if (!isBeta && !isTest) ...[
                 const SizedBox(height: 4),
                 Text(
                   'LICENCE À VIE',
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade700),
                 ),
               ],
-              if (isBeta) ...[
+              if (isBeta || isTest) ...[
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: (daysLeft.clamp(0, 7)) / 7,
+                    value: (timeLeft.clamp(0, totalDuration)) / totalDuration,
                     backgroundColor: Colors.orange.withValues(alpha: 0.1),
                     color: Colors.orange,
                     minHeight: 4,
@@ -318,7 +351,7 @@ class _UserHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  daysLeft > 0 ? 'Expire dans $daysLeft jour(s)' : 'EXPIRÉ',
+                  timeLeft > 0 ? 'Expire dans $timeLeft $unit' : 'EXPIRÉ',
                   style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
                 ),
               ],

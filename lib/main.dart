@@ -32,6 +32,7 @@ void main() async {
 
   final testUsers = [
     {'m': 'admin', 'p': 'admin', 'n': 'Administrateur', 'r': 'admin'},
+    {'m': 'tester', 'p': 'tester', 'n': 'Test Expérience (5 min)', 'r': 'consultation'},
     {'m': 'beta', 'p': 'beta', 'n': 'Testeur Bêta', 'r': 'admin'},
     {'m': 'user', 'p': 'user', 'n': 'Utilisateur Standard', 'r': 'consultation'},
   ];
