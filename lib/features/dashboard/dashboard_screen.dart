@@ -246,7 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _QuickActionsBar(),  const SizedBox(height: 12),
+                  // _QuickActionsBar(),  const SizedBox(height: 12),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(

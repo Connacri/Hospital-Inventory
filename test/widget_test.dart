@@ -14,12 +14,12 @@ void main() {
     // Note : Dans un test réel, les singletons (ObjectBox, etc.) devraient être mockés.
     await tester.pumpWidget(const HopitalInventaireApp());
 
-    // Vérifie qu'on arrive sur l'écran d'authentification
-    expect(find.text('PLATEAU INVENTAIRE'), findsOneWidget);
-    expect(find.text('Veuillez vous identifier'), findsOneWidget);
+    // Vérifie qu'on arrive sur l'écran d'accueil/sélection
+    expect(find.text('BIENVENUE SUR PLATEAU'), findsOneWidget);
+    expect(find.text('Choisissez votre mode d\'accès'), findsOneWidget);
 
-    // Vérifie la présence des libellés des champs
-    expect(find.text('Matricule'), findsOneWidget);
-    expect(find.text('Mot de passe'), findsOneWidget);
+    // Vérifie la présence des options
+    expect(find.text('Connexion Manuelle'), findsOneWidget);
+    expect(find.text('Appairage QR Code'), findsOneWidget);
   });
 }

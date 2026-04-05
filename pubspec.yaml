@@ -68,6 +68,8 @@ dev_dependencies:
   build_runner: ^2.4.13
   objectbox_generator: ^4.1.0
   flutter_lints: ^6.0.0
+  renamer: ^1.0.1
+
 
 flutter:
   uses-material-design: true
