@@ -35,22 +35,46 @@ jobs:
         run: flutter pub get
 
       # 5️⃣ Détecter la dernière release et incrémenter le patch
+      # - name: Get latest tag
+      #   id: tag
+      #   run: |
+      #     git fetch --tags
+      #     TAG=$(git tag --sort=-v:refname | head -n 1)
+      #     echo "Latest tag: $TAG"
+      #     if [ -z "$TAG" ]; then
+      #       echo "NEW_TAG=v1.0.0+1" >> $GITHUB_ENV
+      #     else
+      #       # Extraire la partie build après '+'
+      #       BUILD=$(echo $TAG | awk -F+ '{print $2}')
+      #       BUILD=$((BUILD+1))
+      #       BASE=$(echo $TAG | awk -F+ '{print $1}')
+      #       echo "NEW_TAG=${BASE}+${BUILD}" >> $GITHUB_ENV
+      #       echo "New tag: $NEW_TAG"
+      #     fi
       - name: Get latest tag
         id: tag
         run: |
-          git fetch --tags
+          git fetch --tags --force
+      
           TAG=$(git tag --sort=-v:refname | head -n 1)
           echo "Latest tag: $TAG"
-          if [ -z "$TAG" ]; then
-            echo "NEW_TAG=v1.0.0+1" >> $GITHUB_ENV
+      
+          if [[ -z "$TAG" ]]; then
+            NEW_TAG="v1.0.0+1"
           else
-            # Extraire la partie build après '+'
-            BUILD=$(echo $TAG | awk -F+ '{print $2}')
-            BUILD=$((BUILD+1))
-            BASE=$(echo $TAG | awk -F+ '{print $1}')
-            echo "NEW_TAG=${BASE}+${BUILD}" >> $GITHUB_ENV
-            echo "New tag: $NEW_TAG"
+            if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+\+[0-9]+$ ]]; then
+              BASE=$(echo "$TAG" | cut -d+ -f1)
+              BUILD=$(echo "$TAG" | cut -d+ -f2)
+              BUILD=$((BUILD + 1))
+              NEW_TAG="${BASE}+${BUILD}"
+            else
+              echo "⚠️ Tag format invalide, fallback vers v1.0.0+1"
+              NEW_TAG="v1.0.0+1"
+            fi
           fi
+      
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          echo "Computed new tag: $NEW_TAG"
       # 6️⃣ Build APK release
       - name: Build APK
         run: flutter build apk --release
