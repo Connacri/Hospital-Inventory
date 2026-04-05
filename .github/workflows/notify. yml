@@ -10,6 +10,18 @@ jobs:
     steps:
       - name: Send Telegram Message
         run: |
-          curl -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
-          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-          -d text="🚀 Nouvelle release: ${{ github.event.release.html_url }}"
+          echo "Token: ${{ secrets.TELEGRAM_TOKEN }}"
+          echo "Chat ID: ${{ secrets.TELEGRAM_CHAT_ID }}"
+          
+          RESPONSE=$(curl -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
+            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+            -d text="🚀 Nouvelle release: ${{ github.event.release.html_url }}")
+          
+          echo "Response: $RESPONSE"
+          
+          if echo "$RESPONSE" | grep -q '"ok":true'; then
+            echo "✅ Message envoyé avec succès"
+          else
+            echo "❌ Erreur lors de l'envoi du message"
+            exit 1
+          fi
