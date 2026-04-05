@@ -1,6 +1,9 @@
 // lib/shared/widgets/main_shell.dart
 import 'package:flutter/material.dart';
+import 'package:plateau/core/extensions/string_extensions.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../features/administration/administration_module.dart';
@@ -21,6 +24,96 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
+  bool _isExpired = false;
+
+  static const String chuHeader = "Le centre hospitalier et universitaire (CHU) Benaouda Benzerdjeb d'Oran\n"
+      "Boulevard Docteur Benzerdjeb, Plateau, 31000, Oran, Algérie.";
+
+  Widget _buildCHUAddress(ThemeData theme, {double fontSize = 10}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Text(
+        chuHeader.toTitleCase(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontSize: fontSize, 
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.primary.withValues(alpha: 0.7),
+          height: 2,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTrialPeriod();
+  }
+
+  Future<void> _checkTrialPeriod() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    
+    // Si admin, pas de période d'essai expirée
+    if (user?.matricule == 'admin') return;
+
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'install_date_v1';
+    final now = DateTime.now();
+
+    if (!prefs.containsKey(key)) {
+      await prefs.setString(key, now.toIso8601String());
+      return;
+    }
+
+    final installDate = DateTime.parse(prefs.getString(key)!);
+    final difference = now.difference(installDate).inDays;
+
+    if (difference >= 7) {
+      setState(() => _isExpired = true);
+      if (mounted) _showExpiredDialog();
+    }
+  }
+
+  void _showExpiredDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => SafeArea(
+        child: PopScope(
+          canPop: false,
+          child: AlertDialog(
+            icon: const Icon(Icons.timer_off_outlined, size: 48, color: Colors.red),
+            title: const Text('Période de test expirée', textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(chuHeader, 
+                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "Votre accès bêta a expiré. Veuillez contacter l'administrateur pour activer la version complète.",
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text("Ramzi : +213 696 41 09 53", style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            actions: [
+              FilledButton.icon(
+                onPressed: () => launchUrl(Uri.parse('tel:+213696410953')),
+                icon: const Icon(Icons.phone),
+                label: const Text('Appeler Ramzi'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   final List<Widget> _screens = [
     const DashboardScreen(),
@@ -75,6 +168,7 @@ class _MainShellState extends State<MainShell> {
                         style: TextStyle(
                           color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 13,
                         ),
                       ),
                       selected: isSelected,
@@ -89,19 +183,16 @@ class _MainShellState extends State<MainShell> {
                 },
               ),
             ),
-            const Divider(indent: 20, endIndent: 20),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.redAccent),
-              title: const Text('Déconnexion', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500)),
-              onTap: () => context.read<AuthProvider>().logout(),
-            ),
-            const SizedBox(height: 16),
+            const Divider(indent: 20, endIndent: 20, height: 1),
+            _buildCHUAddress(theme, fontSize: 10),
+            const SizedBox(height: 8),
           ],
         ),
       ) : null,
-      body: Row(
-        children: [
-          if (isLarge)
+      body: SafeArea(
+        child: Row(
+          children: [
+            if (isLarge)
             Container(
               width: 260,
               decoration: BoxDecoration(
@@ -130,31 +221,30 @@ class _MainShellState extends State<MainShell> {
                     ),
                   ),
                 )).toList(),
-                trailing: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      ListTile(
-                        leading: const Icon(Icons.logout, color: Colors.redAccent),
-                        title: const Text('Déconnexion', style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
-                        onTap: () => context.read<AuthProvider>().logout(),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                trailing: Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildCHUAddress(theme, fontSize: 10),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          Expanded(
-            child: Container(
-              color: theme.colorScheme.surface,
-              child: _screens[_selectedIndex],
+            Expanded(
+              child: Container(
+                color: theme.colorScheme.surface,
+                child: _screens[_selectedIndex],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -164,6 +254,81 @@ class _UserHeader extends StatelessWidget {
   final bool isDrawer;
   const _UserHeader({required this.isDrawer});
 
+  Widget _buildLicenseBadge(BuildContext context, ThemeData theme) {
+    final now = DateTime.now();
+    final user = context.watch<AuthProvider>().currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    final isBeta = user.matricule != 'admin';
+
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        final prefs = snapshot.data!;
+        final installStr = prefs.getString('install_date_v1');
+        if (installStr == null) return const SizedBox.shrink();
+
+        final installDate = DateTime.parse(installStr);
+        final diff = now.difference(installDate);
+        final daysLeft = 7 - diff.inDays;
+
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isBeta ? Colors.orange.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isBeta ? Colors.orange.withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(isBeta ? Icons.biotech : Icons.verified_user, 
+                    size: 16, color: isBeta ? Colors.orange : Colors.green),
+                  const SizedBox(width: 8),
+                  Text(
+                    isBeta ? 'LICENCE BÊTA' : 'PREMIUM 1 POSTE',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: isBeta ? Colors.orange.shade900 : Colors.green.shade900,
+                    ),
+                  ),
+                ],
+              ),
+              if (!isBeta) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'LICENCE À VIE',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                ),
+              ],
+              if (isBeta) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: (daysLeft.clamp(0, 7)) / 7,
+                    backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                    color: Colors.orange,
+                    minHeight: 4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  daysLeft > 0 ? 'Expire dans $daysLeft jour(s)' : 'EXPIRÉ',
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -171,80 +336,106 @@ class _UserHeader extends StatelessWidget {
     if (user == null) return const SizedBox.shrink();
 
     if (isDrawer) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary,
-          borderRadius: const BorderRadius.only(bottomRight: Radius.circular(40)),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.white,
-              child: Text(
-                user.nomComplet[0].toUpperCase(),
-                style: TextStyle(color: theme.colorScheme.primary, fontSize: 24, fontWeight: FontWeight.bold),
-              ),
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: const BorderRadius.only(bottomRight: Radius.circular(40)),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    user.nomComplet,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    user.nomComplet[0].toUpperCase(),
+                    style: TextStyle(color: theme.colorScheme.primary, fontSize: 24, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    user.role.toUpperCase(),
-                    style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8), letterSpacing: 1.2),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        user.nomComplet,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      Text(
+                        user.role.toUpperCase(),
+                        style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.8), letterSpacing: 1.2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white70),
+                  onPressed: () => context.read<AuthProvider>().logout(),
+                  tooltip: 'Déconnexion',
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          _buildLicenseBadge(context, theme),
+        ],
       );
     }
 
     return Container(
       width: 260,
-      padding: const EdgeInsets.all(24),
-      child: Column(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: theme.colorScheme.primary, width: 2),
+          Positioned(
+            top: 0,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+              onPressed: () => context.read<AuthProvider>().logout(),
+              tooltip: 'Déconnexion',
             ),
-            child: CircleAvatar(
-              radius: 35,
-              backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-              child: Text(
-                user.nomComplet[0].toUpperCase(),
-                style: TextStyle(color: theme.colorScheme.primary, fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: theme.colorScheme.primary, width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 35,
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  child: Text(
+                    user.nomComplet[0].toUpperCase(),
+                    style: TextStyle(color: theme.colorScheme.primary, fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              Text(
+                user.nomComplet,
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              Text(
+                user.role.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildLicenseBadge(context, theme),
+              const SizedBox(height: 16),
+              const Divider(indent: 20, endIndent: 20),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            user.nomComplet,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          Text(
-            user.role.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
         ],
       ),
     );
@@ -270,13 +461,15 @@ class _AdminShell extends StatelessWidget {
             ],
           ),
         ),
-        body: const TabBarView(
-          children: [
-            UsersListScreen(),
-            ServicesListScreen(),
-            CategoriesListScreen(),
-            SupabaseConfigScreen(),
-          ],
+        body: SafeArea(
+          child: TabBarView(
+            children: [
+              UsersListScreen(),
+              ServicesListScreen(),
+              CategoriesListScreen(),
+              SupabaseConfigScreen(),
+            ],
+          ),
         ),
       ),
     );

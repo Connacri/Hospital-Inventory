@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/extensions/string_extensions.dart';
 import '../../objectbox.g.dart' hide SyncState;
 import '../articles/article_module.dart';
 
@@ -635,7 +636,7 @@ class _ServiceIconCard extends StatelessWidget {
               Icon(Icons.local_hospital_rounded, color: darkColor, size: 32),
               const SizedBox(height: 8),
               Text(
-                service.libelle,
+                service.libelle.toTitleCase(),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -1095,7 +1096,7 @@ class _TopServicesCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              s.label,
+                              s.label.toTitleCase(),
                               style: const TextStyle(fontSize: 12),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1180,7 +1181,7 @@ class _MaintenanceCard extends StatelessWidget {
                     size: 16,
                   ),
                   title: Text(
-                    articleRef?.designation ?? a.numeroInventaire,
+                    (articleRef?.designation ?? a.numeroInventaire).toTitleCase(),
                     style: const TextStyle(fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
