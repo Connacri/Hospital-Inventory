@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>CHU Benaouda Benzerdjeb – Oran | Application Mobile Officielle</title>
+  <!-- Google Fonts + Font Awesome pour une identité moderne et soignée -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f4f7fc;
+      color: #1a2c3e;
+      line-height: 1.5;
+      scroll-behavior: smooth;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* HEADER */
+    .header {
+      background: linear-gradient(135deg, #0b2b3b 0%, #134e5e 100%);
+      color: white;
+      padding: 2rem 0 1.5rem 0;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+      position: relative;
+      z-index: 10;
+    }
+
+    .header-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo-area h1 {
+      font-size: 1.9rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      margin-bottom: 0.25rem;
+    }
+
+    .logo-area p {
+      font-size: 1rem;
+      font-weight: 400;
+      opacity: 0.9;
+      border-left: 3px solid #4fc3f7;
+      padding-left: 12px;
+    }
+
+    .badge-chu {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(4px);
+      padding: 8px 18px;
+      border-radius: 40px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-chu i {
+      font-size: 1.1rem;
+      color: #a0e7ff;
+    }
+
+    /* navigation */
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      margin-top: 1.8rem;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      padding-top: 1.2rem;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      color: #f0f9ff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: 0.2s;
+      font-size: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-links a:hover {
+      color: #b9f3ff;
+      transform: translateY(-1px);
+    }
+
+    section {
+      padding: 4rem 0;
+    }
+
+    .section-title {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      position: relative;
+      display: inline-block;
+      letter-spacing: -0.3px;
+    }
+
+    .section-title:after {
+      content: '';
+      position: absolute;
+      bottom: -12px;
+      left: 0;
+      width: 60px;
+      height: 4px;
+      background: #2c7da0;
+      border-radius: 4px;
+    }
+
+    /* BOUTON ANDROID TÉLÉCHARGEMENT - ÉLÉMENT STAR */
+    .android-download-section {
+      background: linear-gradient(115deg, #e9f2f5 0%, #ffffff 100%);
+      border-radius: 2rem;
+      padding: 1.2rem 2rem;
+      margin: 1rem 0 2rem 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.03);
+      border: 1px solid rgba(44,125,160,0.2);
+    }
+
+    .app-text {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .app-icon-large {
+      background: #134e5e;
+      width: 60px;
+      height: 60px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: white;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+
+    .app-text h3 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #0b2b3b;
+    }
+
+    .app-text p {
+      color: #2c5a6e;
+      max-width: 380px;
+    }
+
+    .btn-android {
+      background: #3ddc84;
+      color: #1f2a3a;
+      padding: 14px 28px;
+      border-radius: 60px;
+      text-decoration: none;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.1rem;
+      transition: all 0.25s ease;
+      box-shadow: 0 6px 14px rgba(61,220,132,0.3);
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-android i {
+      font-size: 1.6rem;
+    }
+
+    .btn-android:hover {
+      background: #2bcb74;
+      transform: scale(1.02);
+      box-shadow: 0 10px 20px rgba(61,220,132,0.4);
+    }
+
+    /* services grid */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+      margin-top: 1rem;
+    }
+
+    .service-card {
+      background: white;
+      border-radius: 28px;
+      padding: 1.8rem;
+      box-shadow: 0 12px 24px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      border: 1px solid rgba(44,125,160,0.1);
+    }
+
+    .service-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 30px -12px rgba(0,0,0,0.15);
+      border-color: #2c7da0;
+    }
+
+    .service-icon {
+      font-size: 2.8rem;
+      color: #2c7da0;
+      margin-bottom: 1.2rem;
+    }
+
+    .service-card h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.8rem;
+    }
+
+    /* adresse & carte */
+    .info-highlight {
+      background: white;
+      border-radius: 2rem;
+      padding: 2rem;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.05);
+      border-left: 6px solid #2c7da0;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .address-block {
+      flex: 2;
+    }
+
+    .address-detail {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0.8rem 0;
+      font-size: 1.1rem;
+      flex-wrap: wrap;
+    }
+
+    .address-block i {
+      color: #2c7da0;
+      width: 32px;
+      font-size: 1.4rem;
+    }
+
+    .map-placeholder {
+      flex: 1;
+      background: #eef2f5;
+      border-radius: 1.5rem;
+      padding: 1rem;
+      text-align: center;
+      min-width: 220px;
+    }
+
+    .map-placeholder iframe {
+      width: 100%;
+      height: 180px;
+      border-radius: 1rem;
+      border: none;
+    }
+
+    .btn-outline-map {
+      background: transparent;
+      border: 1px solid #2c7da0;
+      padding: 0.5rem 1rem;
+      border-radius: 40px;
+      color: #1e5a74;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.2s;
+      margin-top: 10px;
+      text-decoration: none;
+    }
+
+    .btn-outline-map:hover {
+      background: #2c7da0;
+      color: white;
+    }
+
+    /* stats */
+    .stats {
+      background: linear-gradient(120deg, #eef5f9, #ffffff);
+      border-radius: 3rem;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+
+    .stats-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      gap: 2rem;
+      text-align: center;
+    }
+
+    .stat-item {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .stat-number {
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: #134e5e;
+    }
+
+    /* footer */
+    .footer {
+      background: #0a2a36;
+      color: #d9e9ef;
+      padding: 2.5rem 0;
+      margin-top: 1rem;
+    }
+
+    .footer-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 2rem;
+    }
+
+    .footer-col {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .footer-col p {
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .footer-col i {
+      width: 26px;
+      color: #6bc2e8;
+    }
+
+    .copyright {
+      text-align: center;
+      padding-top: 2rem;
+      margin-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-size: 0.85rem;
+    }
+
+    /* access tool */
+    .access-tool {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #134e5e;
+      width: 48px;
+      height: 48px;
+      border-radius: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.4rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: 0.2s;
+      z-index: 99;
+      cursor: pointer;
+      border: none;
+    }
+
+    .access-tool:hover {
+      background: #2c7da0;
+    }
+
+    /* responsive */
+    @media (max-width: 900px) {
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .android-download-section {
+        flex-direction: column;
+        text-align: center;
+      }
+      .app-text {
+        justify-content: center;
+        text-align: center;
+      }
+      .info-highlight {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 0 18px;
+      }
+      .logo-area h1 {
+        font-size: 1.5rem;
+      }
+      .btn-android {
+        padding: 12px 20px;
+        font-size: 1rem;
+      }
+      .section-title {
+        font-size: 1.6rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="container">
+    <div class="header-content">
+      <div class="logo-area">
+        <h1>🏥 CHU Benaouda Benzerdjeb</h1>
+        <p>Centre Hospitalo‑Universitaire d’Oran · Excellence & Humanisme</p>
+      </div>
+      <div class="badge-chu">
+        <i class="fas fa-university"></i>
+        <span>Établissement public de santé · Pôle de référence</span>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="#accueil"><i class="fas fa-home"></i> Accueil</a>
+      <a href="#services"><i class="fas fa-stethoscope"></i> Services</a>
+      <a href="#adresse"><i class="fas fa-location-dot"></i> Accès & Adresse</a>
+      <a href="#contact"><i class="fas fa-phone-alt"></i> Contact</a>
+      <a href="#app"><i class="fab fa-android"></i> Application</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- SECTION ACCUEIL -->
+  <section id="accueil">
+    <div class="container">
+      <div class="info-highlight" style="background: linear-gradient(105deg, #ffffff 0%, #f8fcff 100%);">
+        <div class="address-block">
+          <h2 style="font-size: 1.9rem; font-weight: 700; margin-bottom: 1rem;">Présentation du CHU</h2>
+          <p style="font-size: 1.1rem; margin-bottom: 1rem;">Le Centre Hospitalo‑Universitaire <strong>Benaouda Benzerdjeb</strong> d’Oran est un pilier de la médecine moderne en Algérie. Reconnu pour son excellence clinique, sa formation médicale et sa recherche, il dessert des milliers de patients chaque année avec des soins de haute spécialité.</p>
+          <div class="address-detail">
+            <i class="fas fa-map-marker-alt"></i> <span><strong>Adresse historique :</strong> Boulevard Docteur Benzerdjeb, Plateau, 31000, Oran, Algérie</span>
+          </div>
+          <div class="address-detail">
+            <i class="fas fa-calendar-alt"></i> <span>Urgences 24h/24 · 7j/7 · Service de garde universitaire</span>
+          </div>
+        </div>
+        <div class="map-placeholder">
+          <i class="fas fa-hospital-user" style="font-size: 2.8rem; color: #2c7da0;"></i>
+          <p style="margin-top: 8px; font-weight: 500;">📍 Localisation précise</p>
+          <a href="#adresse" class="btn-outline-map" style="margin-top: 0;"><i class="fas fa-directions"></i> Voir sur la carte</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOUTON ANDROID DE TÉLÉCHARGEMENT - ZONE MISE EN AVANT -->
+  <div class="container" id="app">
+    <div class="android-download-section">
+      <div class="app-text">
+        <div class="app-icon-large">
+          <i class="fab fa-android"></i>
+        </div>
+        <div>
+          <h3>Application mobile CHU Oran</h3>
+          <p>Prenez rendez-vous, accédez à vos résultats, suivez votre dossier médical et recevez des alertes santé directement sur votre smartphone.</p>
+        </div>
+      </div>
+      <a href="#" id="androidDownloadBtn" class="btn-android">
+        <i class="fab fa-android"></i> Télécharger l'APK
+        <i class="fas fa-download"></i>
+      </a>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="container">
+    <div class="stats">
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-number">+1200</div><div>Lits opérationnels</div></div>
+        <div class="stat-item"><div class="stat-number">45+</div><div>Spécialités médicales</div></div>
+        <div class="stat-item"><div class="stat-number">3000+</div><div>Professionnels de santé</div></div>
+        <div class="stat-item"><div class="stat-number">100k+</div><div>Patients / an</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVICES -->
+  <section id="services">
+    <div class="container">
+      <h2 class="section-title">🏥 Services & Départements de pointe</h2>
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-heartbeat"></i></div>
+          <h3>Cardiologie & Chirurgie cardio-vasculaire</h3>
+          <p>Unité de cathétérisme cardiaque, prise en charge des infarctus et chirurgie à cœur ouvert.</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-brain"></i></div>
+          <h3>Neurologie & Neurochirurgie</h3>
+          <p>Centre de référence pour AVC, tumeurs cérébrales et épilepsie avec plateau technique avancé.</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-baby-carriage"></i></div>
+          <h3>Maternité & Pédiatrie</h3>
+          <p>Soins néonataux, suivi de grossesse à haut risque et service de pédiatrie générale.</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-procedures"></i></div>
+          <h3>Réanimation & Urgences</h3>
+          <p>Urgences adultes/pédiatriques, SMUR, réanimation polyvalente et soins intensifs.</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-x-ray"></i></div>
+          <h3>Imagerie médicale</h3>
+          <p>IRM, scanner, radiologie numérique et échographies – diagnostics de précision.</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon"><i class="fas fa-flask"></i></div>
+          <h3>Laboratoire & Biologie</h3>
+          <p>Analyses médicales, microbiologie et biologie moléculaire au service des patients.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADRESSE + CARTE -->
+  <section id="adresse">
+    <div class="container">
+      <h2 class="section-title"><i class="fas fa-map-pin"></i> Accès & adresse officielle</h2>
+      <div class="info-highlight">
+        <div class="address-block">
+          <div class="address-detail"><i class="fas fa-location-dot"></i> <span><strong>CHU Benaouda Benzerdjeb d'Oran</strong><br>Boulevard Docteur Benzerdjeb, Plateau, 31000, Oran, Algérie</span></div>
+          <div class="address-detail"><i class="fas fa-phone"></i> <span>Standard central : +213 (0)41 123 456</span></div>
+          <div class="address-detail"><i class="fas fa-envelope"></i> <span>contact@chu-oran.dz</span></div>
+          <div class="address-detail"><i class="fas fa-clock"></i> <span>Consultations externes : Dim - Jeu 08:30 – 16:00 · Urgences H24</span></div>
+          <p style="margin-top: 16px; background: #eef2fa; padding: 10px 14px; border-radius: 28px;"><i class="fas fa-bus"></i> Transports en commun : lignes de bus urbains (Plateau / Les Castors) et taxis.</p>
+        </div>
+        <div class="map-placeholder">
+          <iframe 
+            src="https://www.openstreetmap.org/export/embed.html?bbox=-0.6430%2C35.6940%2C-0.6300%2C35.7020&layer=mapnik&marker=35.6980%2C-0.6365" 
+            style="border:0; width:100%; height:200px;" 
+            allowfullscreen="" 
+            loading="lazy"
+            title="Carte CHU Benaouda Benzerdjeb Oran">
+          </iframe>
+          <small style="display:block; margin-top: 8px; color:#2c5a6e;"><i class="fas fa-map-marked-alt"></i> Boulevard Docteur Benzerdjeb, Plateau – CHU</small>
+          <a href="https://www.openstreetmap.org/?mlat=35.6980&mlon=-0.6365#map=17/35.6980/-0.6365" target="_blank" rel="noopener noreferrer" class="btn-outline-map" style="margin-top: 12px;"><i class="fas fa-external-link-alt"></i> Agrandir la carte</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="container">
+      <h2 class="section-title"><i class="fas fa-headset"></i> Prenez contact</h2>
+      <div style="background: white; border-radius: 2rem; padding: 2rem; box-shadow: 0 8px 20px rgba(0,0,0,0.05);">
+        <div style="display: flex; flex-wrap: wrap; gap: 2rem; justify-content: space-between;">
+          <div style="flex: 1; min-width: 220px;">
+            <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Informations utiles</h3>
+            <div class="address-detail"><i class="fas fa-phone-alt"></i> Urgences : (041) 98 33 44</div>
+            <div class="address-detail"><i class="fas fa-fax"></i> Fax : +213 (0)41 123 457</div>
+            <div class="address-detail"><i class="fas fa-building"></i> Direction générale : poste 101</div>
+            <div class="address-detail"><i class="fab fa-android"></i> Application mobile disponible</div>
+          </div>
+          <div style="flex: 2; min-width: 250px;">
+            <h3 style="font-size: 1.5rem; margin-bottom: 1rem;">Formulaire de renseignement</h3>
+            <form action="#" method="post">
+              <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+                <input type="text" placeholder="Votre nom" style="flex:1; padding: 12px; border-radius: 40px; border:1px solid #cbd5e1; font-family: inherit;">
+                <input type="email" placeholder="Email" style="flex:1; padding: 12px; border-radius: 40px; border:1px solid #cbd5e1; font-family: inherit;">
+              </div>
+              <textarea rows="3" placeholder="Votre message (demande administrative, prise de RDV, informations)" style="width:100%; padding: 12px; border-radius: 28px; border:1px solid #cbd5e1; font-family: inherit; margin-bottom: 1rem;"></textarea>
+              <button type="button" class="btn-outline-map" style="background:#134e5e; color:white; border: none; padding: 10px 24px; cursor:pointer;" onclick="alert('Message simulé. Merci de contacter le CHU directement. Pour l\'application, utilisez le bouton Android.');">Envoyer la demande <i class="fas fa-paper-plane"></i></button>
+              <p style="font-size: 0.8rem; margin-top: 12px;"><i class="fas fa-info-circle"></i> Formulaire de démonstration.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-content">
+      <div class="footer-col">
+        <h3 style="color:white; margin-bottom: 12px;">CHU Benaouda Benzerdjeb</h3>
+        <p><i class="fas fa-map-marker-alt"></i> Boulevard Docteur Benzerdjeb, Plateau, 31000, Oran, Algérie</p>
+        <p><i class="fas fa-phone"></i> Standard: +213 41 123 456</p>
+        <p><i class="fas fa-envelope"></i> contact@chu-oran.dz</p>
+      </div>
+      <div class="footer-col">
+        <h3 style="color:white; margin-bottom: 12px;">Liens rapides</h3>
+        <p><a href="#accueil" style="color:#cce7f0; text-decoration:none;">Accueil</a></p>
+        <p><a href="#services" style="color:#cce7f0; text-decoration:none;">Services médicaux</a></p>
+        <p><a href="#adresse" style="color:#cce7f0; text-decoration:none;">Plan d'accès</a></p>
+        <p><a href="#app" style="color:#cce7f0; text-decoration:none;">Télécharger l'app</a></p>
+      </div>
+      <div class="footer-col">
+        <h3 style="color:white; margin-bottom: 12px;">Horaires généraux</h3>
+        <p>Consultations : Dim → Jeu 08h30 – 16h00</p>
+        <p>Urgences médicales : 24h/24</p>
+        <p>Application : disponible sur Android</p>
+      </div>
+    </div>
+    <div class="copyright">
+      <p>© 2025 CHU Benaouda Benzerdjeb d'Oran – Centre Hospitalo-Universitaire. Tous droits réservés.</p>
+      <p>Prendre soin, former, innover au cœur du Plateau, Oran.</p>
+    </div>
+  </div>
+</footer>
+
+<button class="access-tool" id="backToTopBtn" aria-label="Retour en haut de page">
+  <i class="fas fa-arrow-up"></i>
+</button>
+
+<script>
+  // Bouton retour haut
+  const backBtn = document.getElementById('backToTopBtn');
+  backBtn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // Ancres fluides
+  document.querySelectorAll('.nav-links a, .footer-col a, .btn-outline-map[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      const targetId = this.getAttribute('href');
+      if (targetId && targetId.startsWith('#')) {
+        const targetElement = document.querySelector(targetId);
+        if (targetElement) {
+          e.preventDefault();
+          targetElement.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+    });
+  });
+
+  // BOUTON TÉLÉCHARGEMENT APPLICATION ANDROID (simulation / déclenchement fichier .apk fictif)
+  const androidBtn = document.getElementById('androidDownloadBtn');
+  if (androidBtn) {
+    androidBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      // Création d'un lien de téléchargement fictif pour démonstration
+      // Dans un environnement réel, pointer vers l'URL de l'APK hébergée.
+      // Exemple : window.location.href = "https://chu-oran.dz/app/chu-patient.apk";
+      // Ici simulation avec alerte + ouverture nouvelle page démo téléchargement.
+      const confirmDownload = confirm("Télécharger l'application officielle CHU Oran (APK Android) ?\n\nCette version est une démo. En environnement réel, le fichier .apk sera proposé.");
+      if (confirmDownload) {
+        // Créer un élément <a> pour simuler le téléchargement d'un fichier .apk fictif
+        const link = document.createElement('a');
+        link.href = "#"; // placeholder
+        link.download = 'chu_oran_app_demo.apk';
+        // Simuler un message d'information : l'utilisateur reçoit une indication réaliste
+        alert("⚡ Démonstration : Téléchargement lancé (fichier simulé).\n\nDans la version finale, l'APK sera hébergé sur les serveurs officiels du CHU.");
+        // Option: rediriger vers une page de téléchargement ou déclencher flux
+        // Pour améliorer l'expérience, on ouvre une fenêtre d'info
+        window.open("https://play.google.com/store/apps/details?id=chu.oran.patient", "_blank");
+      }
+    });
+  }
+</script>
+</body>
+</html>

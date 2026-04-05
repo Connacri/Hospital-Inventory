@@ -70,6 +70,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   renamer: ^1.0.1
   flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.4
 
 flutter_launcher_icons:
   android: "launcher_icon"
@@ -80,6 +81,12 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/orl.jpg"
     icon_size: 256
+
+flutter_native_splash:
+  color: "#00796B"
+  image: "assets/orl.jpg"
+  android: true
+  ios: true
 
 
 flutter:
