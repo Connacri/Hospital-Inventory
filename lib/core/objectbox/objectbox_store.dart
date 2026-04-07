@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -54,17 +55,22 @@ class ObjectBoxStore {
   }
 
   /// Initialiser au démarrage de l'app — avant tout autre service
-  static Future<void> initialize() async {
+  /// [directory] permet d'injecter un chemin (utile pour les tests).
+  static Future<void> initialize({String? directory}) async {
     if (_initialized) return;
 
     _instance = ObjectBoxStore._();
-    await _instance._init();
+    await _instance._init(directory: directory);
     _initialized = true;
   }
 
-  Future<void> _init() async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final dbPath = p.join(docsDir.path, 'hopital_inventaire_db');
+  Future<void> _init({String? directory}) async {
+    final dbPath = directory ??
+        p.join(
+          (await getApplicationDocumentsDirectory()).path,
+          'hopital_inventaire_db',
+        );
+    await Directory(dbPath).create(recursive: true);
 
     _store = await openStore(directory: dbPath);
 

@@ -1,77 +1,50 @@
-name: plateau
+name: "plateau"
 description: "A new Inventaire project."
-publish_to: 'none'
-
-version: 1.0.0+16
-
+publish_to: "none"
+version: "1.0.0+16"
 environment:
-  sdk: ^3.10.4
-
+  sdk: "^3.10.4"
 dependencies:
   flutter:
-    sdk: flutter
-
-  # ── State Management ──
-  provider: ^6.1.5+1
-
-  # ── Base de données locale (source de vérité) ──
-  objectbox: ^4.1.0
-  objectbox_flutter_libs: ^4.1.0
-
-  # ── Backend sync (optionnel) ──
-  supabase_flutter: ^2.12.2
-
-  # ── Sécurité / Chiffrement ──
-  encrypt: ^5.0.3
-  crypto: ^3.0.7
-  bcrypt: ^1.2.0
-
-  # ── Identifiants ──
-  uuid: ^4.5.3
-  device_info_plus: ^12.4.0
-
-  # ── Connectivité ──
-  connectivity_plus: ^7.1.0
-
-  # ── UI / Material 3 ──
-  material_color_utilities: any
-  flutter_animate: ^4.5.2
-  gap: ^3.0.1
-  google_fonts: ^8.0.2
-
-  # ── QR Code ──
-  qr_flutter: ^4.1.0
-  mobile_scanner: ^7.2.0       # Android uniquement
-
-  # ── Impression PDF ──
-  pdf: ^3.12.0
-  printing: ^5.14.3
-  path_provider: ^2.1.5
-
-  # ── Utilitaires ──
-  intl: ^0.20.2
-  shared_preferences: ^2.5.5
-  logger: ^2.7.0
-  equatable: ^2.0.8
-  faker: ^2.2.0
-  barcode_widget: ^2.0.4
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.9
-  path: ^1.9.1
-  url_launcher: ^6.3.1
-
-
+    sdk: "flutter"
+  provider: "^6.1.5+1"
+  objectbox: "^4.1.0"
+  objectbox_flutter_libs: "^4.1.0"
+  supabase_flutter: "^2.12.2"
+  encrypt: "^5.0.3"
+  crypto: "^3.0.7"
+  bcrypt: "^1.2.0"
+  uuid: "^4.5.3"
+  device_info_plus: "^12.4.0"
+  connectivity_plus: "^7.1.0"
+  material_color_utilities: "any"
+  flutter_animate: "^4.5.2"
+  gap: "^3.0.1"
+  google_fonts: "^8.0.2"
+  qr_flutter: "^4.1.0"
+  mobile_scanner: "^7.2.0"
+  pdf: "^3.12.0"
+  printing: "^5.14.3"
+  path_provider: "^2.1.5"
+  intl: "^0.20.2"
+  shared_preferences: "^2.5.5"
+  logger: "^2.7.0"
+  equatable: "^2.0.8"
+  faker: "^2.2.0"
+  barcode_widget: "^2.0.4"
+  cupertino_icons: "^1.0.9"
+  path: "^1.9.1"
+  url_launcher: "^6.3.1"
+  inno_build: "^0.4.0"
 dev_dependencies:
   flutter_test:
-    sdk: flutter
-  build_runner: ^2.4.13
-  objectbox_generator: ^4.1.0
-  flutter_lints: ^6.0.0
-  renamer: ^1.0.1
-  flutter_launcher_icons: ^0.13.1
-  flutter_native_splash: ^2.4.4
-
+    sdk: "flutter"
+  build_runner: "^2.4.13"
+  objectbox_generator: "^4.1.0"
+  flutter_lints: "^6.0.0"
+  renamer: "^1.0.1"
+  flutter_launcher_icons: "^0.13.1"
+  flutter_native_splash: "^2.4.4"
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
@@ -81,15 +54,14 @@ flutter_launcher_icons:
     generate: true
     image_path: "assets/orl.jpg"
     icon_size: 256
-
 flutter_native_splash:
   color: "#00796B"
   image: "assets/orl.jpg"
   android: true
   ios: true
-
-
 flutter:
   uses-material-design: true
   assets:
-    - assets/
+    - "assets/"
+inno_build:
+  app_id: "553ad795-69c8-4833-a60b-e93f38ce5c8d"
