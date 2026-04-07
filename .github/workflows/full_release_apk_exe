@@ -48,3 +48,30 @@ jobs:
           APK_URL=$(echo "$RESPONSE" | jq -r '.assets[0].browser_download_url')
 
           echo "APK_URL=$APK_URL" >> $GITHUB_ENV
+  windows:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+
+      - run: flutter pub get
+      - run: flutter build windows
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Installer
+        run: iscc installer/setup.iss
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v-${{ github.run_number }}
+          files: installer/output/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
