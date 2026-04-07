@@ -502,7 +502,7 @@ class _InventaireKpiBarre extends StatelessWidget {
           ),
           _KpiItem(
             label: 'VALEUR',
-            value: '${(valeur / 1000).toStringAsFixed(1)}K',
+            value: '{(valeur / 1000).toStringAsFixed(1)}K',
             icon: Icons.euro,
             color: Colors.purple,
           ),

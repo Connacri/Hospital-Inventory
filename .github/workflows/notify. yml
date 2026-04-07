@@ -1,27 +1,53 @@
-name: Notify Release
+name: 📱 Telegram - Nouvelle Release Hospital Inventory
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'        # Tous les jours à 9h UTC
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Send Telegram Message
+      - name: 🔍 Récupérer la dernière release
+        id: release
         run: |
-          echo "Token: ${{ secrets.TELEGRAM_TOKEN }}"
-          echo "Chat ID: ${{ secrets.TELEGRAM_CHAT_ID }}"
-          
-          RESPONSE=$(curl -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-            -d text="🚀 Nouvelle release: ${{ github.event.release.html_url }}")
-          
-          echo "Response: $RESPONSE"
-          
-          if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Message envoyé avec succès"
-          else
-            echo "❌ Erreur lors de l'envoi du message"
-            exit 1
-          fi
+          sudo apt-get update -qq && sudo apt-get install -y jq
+
+          JSON=$(curl -s https://api.github.com/repos/Connacri/Hospital-Inventory/releases/latest)
+
+          APK_URL=$(echo "$JSON" | jq -r '.assets[] | select(.name | endswith(".apk")) | .browser_download_url')
+          QR_URL=$(echo "$JSON" | jq -r '.assets[] | select(.name | endswith(".png")) | .browser_download_url')
+          VERSION=$(echo "$JSON" | jq -r '.tag_name')
+          RELEASE_URL=$(echo "$JSON" | jq -r '.html_url')
+
+          echo "APK_URL=$APK_URL" >> $GITHUB_OUTPUT
+          echo "QR_URL=$QR_URL" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_OUTPUT
+
+          echo "✅ Version : $VERSION"
+          echo "📥 APK : $APK_URL"
+          echo "📱 QR  : $QR_URL"
+
+      - name: 📤 Envoi Telegram (QR + Message)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MESSAGE="🚀 <b>Nouvelle version Hospital Inventory !</b>
+
+Version : <b>${{ steps.release.outputs.VERSION }}</b>
+
+📥 <a href='${{ steps.release.outputs.APK_URL }}'>Télécharger l'APK</a>
+🔗 <a href='${{ steps.release.outputs.RELEASE_URL }}'>Voir la release</a>"
+
+          # Envoi du QR code en image + texte
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendPhoto" \
+            -F chat_id="${TELEGRAM_CHAT_ID}" \
+            -F photo="${{ steps.release.outputs.QR_URL }}" \
+            -F caption="$MESSAGE" \
+            -F parse_mode="HTML"
+
+          echo "✅ Notification envoyée avec QR code !"

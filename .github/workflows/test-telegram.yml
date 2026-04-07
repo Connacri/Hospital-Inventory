@@ -6,6 +6,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Check secrets
         run: |
@@ -17,20 +18,25 @@ jobs:
             echo "❌ TELEGRAM_CHAT_ID non défini"
             exit 1
           fi
-          echo "✅ Les secrets sont définis"
+          echo "✅ Secrets OK"
 
       - name: Send Test Message to Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           echo "📤 Envoi du message de test..."
-          
-          RESPONSE=$(curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
-            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=🧪 Test de notification Telegram - $(date)")
-          
+
+          RESPONSE=$(curl -s -X POST \
+            "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=🧪 Test de notification Telegram - $(date)" \
+            -d "parse_mode=HTML")
+
           echo "Réponse: $RESPONSE"
-          
+
           if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo "✅ Message envoyé avec succès!"
+            echo "✅ Message envoyé avec succès !"
           else
             echo "❌ Erreur lors de l'envoi"
             echo "$RESPONSE"
