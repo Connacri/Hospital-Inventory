@@ -1,0 +1,50 @@
+name: Full Build & Release
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout
+      - uses: actions/checkout@v4
+
+      # Setup Flutter
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+
+      # Dependencies
+      - run: flutter pub get
+
+      # Build APK
+      - run: flutter build apk --release
+
+      # Rename APK
+      - run: |
+          mkdir output
+          cp build/app/outputs/flutter-apk/app-release.apk output/app.apk
+
+      # Create release
+      - name: Create Release
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v-${{ github.run_number }}
+          name: Release ${{ github.run_number }}
+          files: output/app.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract APK URL
+      - name: Get APK URL
+        run: |
+          RESPONSE=$(curl -s \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/v-${{ github.run_number }})
+
+          APK_URL=$(echo "$RESPONSE" | jq -r '.assets[0].browser_download_url')
+
+          echo "APK_URL=$APK_URL" >> $GITHUB_ENV
