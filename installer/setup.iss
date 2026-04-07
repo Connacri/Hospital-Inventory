@@ -8,7 +8,7 @@ DefaultDirName={pf}\HospitalInventory
 DefaultGroupName=HospitalInventory
 OutputDir=output
 OutputBaseFilename=installer
-
+//walou
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs
 Source: "vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
