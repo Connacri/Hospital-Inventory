@@ -10,9 +10,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 import 'core/auth/auth_provider.dart';
-import 'core/objectbox/entities.dart';
 import 'core/objectbox/objectbox_store.dart';
 import 'core/security/encryption_service.dart';
 import 'core/services/device_info_service.dart';

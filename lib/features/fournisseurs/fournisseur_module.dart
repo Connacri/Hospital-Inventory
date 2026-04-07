@@ -10,6 +10,7 @@ import '../../../core/objectbox/entities.dart';
 import '../../../core/objectbox/objectbox_store.dart';
 import '../../../core/repositories/base_repository.dart';
 import '../../../core/services/numero_generator.dart';
+import '../../core/extensions/string_extensions.dart';
 import '../../objectbox.g.dart';
 import '../reception/reception_module.dart';
 
@@ -37,21 +38,31 @@ class FournisseurRepository extends BaseRepository<FournisseurEntity> {
             .equals(false)
             .and(FournisseurEntity_.actif.equals(true)),
       )
-      .order(FournisseurEntity_.raisonSociale)
+      .order(FournisseurEntity_.updatedAt, flags: Order.descending)
       .build()
       .find();
 
   List<FournisseurEntity> getAllIncludingInactive() => box
       .query(FournisseurEntity_.isDeleted.equals(false))
+      .order(FournisseurEntity_.updatedAt, flags: Order.descending)
+      .build()
+      .find();
+
+  List<FournisseurEntity> getAllAlphabetical() => box
+      .query(
+        FournisseurEntity_.isDeleted
+            .equals(false)
+            .and(FournisseurEntity_.actif.equals(true)),
+      )
       .order(FournisseurEntity_.raisonSociale)
       .build()
       .find();
 
   // Autocomplétion ultra-rapide — ObjectBox local
-  List<FournisseurEntity> search(String query) {
-    if (query.isEmpty) return getAll();
+  List<FournisseurEntity> search(String query, {bool alphabetical = false}) {
+    if (query.isEmpty) return alphabetical ? getAllAlphabetical() : getAll();
     final q = query.toLowerCase();
-    return box
+    final builder = box
         .query(
           FournisseurEntity_.isDeleted
               .equals(false)
@@ -68,10 +79,15 @@ class FournisseurRepository extends BaseRepository<FournisseurEntity> {
                       FournisseurEntity_.rc.contains(q, caseSensitive: false),
                     ),
               ),
-        )
-        .order(FournisseurEntity_.raisonSociale)
-        .build()
-        .find();
+        );
+    
+    if (alphabetical) {
+      builder.order(FournisseurEntity_.raisonSociale);
+    } else {
+      builder.order(FournisseurEntity_.updatedAt, flags: Order.descending);
+    }
+
+    return builder.build().find();
   }
 
   // ── BaseRepository impl ────────────────────────────────────────────────────
@@ -413,7 +429,7 @@ class _FournisseurCard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
@@ -432,7 +448,7 @@ class _FournisseurCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      f.raisonSociale,
+                      f.raisonSociale.toTitleCase(),
                       style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -572,12 +588,12 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
             children: [
               _buildHeader(context),
               const SizedBox(height: 24),
-              _buildSection(
+                _buildSection(
                 context,
                 title: 'Informations Générales',
                 icon: Icons.info_outline,
                 content: [
-                  _buildInfoTile(context, 'Raison Sociale', f.raisonSociale),
+                  _buildInfoTile(context, 'Raison Sociale', f.raisonSociale.toTitleCase()),
                   _buildInfoTile(context, 'Code Fournisseur', f.code),
                   _buildInfoTile(context, 'NIF', f.nif ?? 'Non renseigné'),
                   _buildInfoTile(context, 'RC', f.rc ?? 'Non renseigné'),
@@ -684,7 +700,7 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
               ..._articles.map((art) => TableRow(
                 children: [
                   _buildTableCell(art.codeArticle),
-                  _buildTableCell(art.designation),
+                  _buildTableCell(art.designation.toTitleCase()),
                   _buildTableCell('${art.prixUnitaireMoyen.toStringAsFixed(0)} DA'),
                   _buildTableCell('${art.stockActuel}', isBold: true),
                 ],
@@ -733,7 +749,7 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
+            color: theme.colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -755,7 +771,7 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.fournisseur.raisonSociale,
+                  widget.fournisseur.raisonSociale.toTitleCase(),
                   style: theme.textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
@@ -1132,10 +1148,10 @@ class FournisseurAutocomplete extends StatelessWidget {
 
     return Autocomplete<FournisseurEntity>(
       initialValue: TextEditingValue(text: initialText),
-      displayStringForOption: (f) => '${f.code} — ${f.raisonSociale}',
+      displayStringForOption: (f) => '${f.code} — ${f.raisonSociale.toTitleCase()}',
       optionsBuilder: (value) {
-        if (value.text.isEmpty) return repo.getAll().take(10);
-        return repo.search(value.text);
+        if (value.text.isEmpty) return repo.getAllAlphabetical().take(10);
+        return repo.search(value.text, alphabetical: true);
       },
       onSelected: onSelected,
       fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
@@ -1182,7 +1198,7 @@ class FournisseurAutocomplete extends StatelessWidget {
                   final f = options.elementAt(i);
                   return ListTile(
                     leading: const Icon(Icons.business_outlined),
-                    title: Text(f.raisonSociale, style: theme.textTheme.bodyLarge),
+                    title: Text(f.raisonSociale.toTitleCase(), style: theme.textTheme.bodyLarge),
                     subtitle: Text('${f.code} • NIF: ${f.nif ?? "—"}', style: theme.textTheme.bodySmall),
                     onTap: () => onSelected(f),
                   );
@@ -1321,7 +1337,7 @@ class _FournisseurMultiSelectState extends State<FournisseurMultiSelect> {
                   runSpacing: 8,
                   children: selectedEntities.map((f) {
                     return InputChip(
-                      label: Text(f.raisonSociale),
+                      label: Text(f.raisonSociale.toTitleCase()),
                       onDeleted: () {
                         setState(() => _selectedUuids.remove(f.uuid));
                         widget.onChanged(_selectedUuids);

@@ -15,6 +15,8 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/extensions/string_extensions.dart';
 import '../../objectbox.g.dart' hide SyncState;
 import '../articles/article_module.dart';
+import '../../core/sync/conflict_resolver_screen.dart';
+import '../inventaire/inventaire_module.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELS
@@ -563,6 +565,148 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+void _showLowStockArticles(BuildContext context) {
+  final store = ObjectBoxStore.instance;
+  final lowStockItems = store.articles
+      .query(ArticleEntity_.isDeleted.equals(false))
+      .build()
+      .find()
+      .where((a) => a.stockActuel <= a.stockMinimum && a.stockMinimum > 0)
+      .toList();
+
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.warning, color: Colors.red),
+          const SizedBox(width: 12),
+          const Text('Articles en stock bas'),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        height: 400,
+        child: lowStockItems.isEmpty
+            ? const Center(child: Text('Aucun article en stock bas'))
+            : ListView.separated(
+                itemCount: lowStockItems.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (ctx, i) {
+                  final art = lowStockItems[i];
+                  return ListTile(
+                    title: Text(art.designation, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Code: ${art.codeArticle}'),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Stock: ${art.stockActuel}',
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Min: ${art.stockMinimum}',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showDialog(
+                        context: context,
+                        builder: (_) => ArticleDetailDialog(article: art),
+                      );
+                    },
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Fermer'),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showMaintenanceArticles(BuildContext context) {
+  final dash = context.read<DashboardProvider>();
+  final maintenanceItems = dash.maintenanceProchaineList;
+
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.build, color: Colors.orange),
+          const SizedBox(width: 12),
+          const Text('Maintenance(s) à venir'),
+        ],
+      ),
+      content: SizedBox(
+        width: 500,
+        height: 400,
+        child: maintenanceItems.isEmpty
+            ? const Center(child: Text('Aucune maintenance prévue sous 30j'))
+            : ListView.separated(
+                itemCount: maintenanceItems.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (ctx, i) {
+                  final item = maintenanceItems[i];
+                  final date = item.dateProchaineMaintenance;
+                  final diff = date?.difference(DateTime.now()).inDays ?? 0;
+                  final articleRef = ObjectBoxStore.instance.articles
+                      .query(ArticleEntity_.uuid.equals(item.articleUuid ?? ''))
+                      .build()
+                      .findFirst();
+
+                  return ListTile(
+                    title: Text(
+                      articleRef?.designation ?? item.numeroInventaire,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text('Inv: ${item.numeroInventaire}'),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          date != null ? DateFormat('dd/MM/yyyy').format(date) : '-',
+                          style: TextStyle(
+                            color: diff <= 7 ? Colors.red : Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          diff <= 0 ? 'En retard' : 'Dans $diff j',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showDialog(
+                        context: context,
+                        builder: (_) => ArticleInventaireDetailDialog(article: item),
+                      );
+                    },
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Fermer'),
+        ),
+      ],
+    ),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DIALOG DE SCAN RAPIDE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -842,18 +986,28 @@ class _AlertesBanner extends StatelessWidget {
                   icon: Icons.merge_type,
                   label: '${dash.conflitsPending} conflit(s)',
                   color: Colors.orange,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ConflictListScreen(),
+                      ),
+                    );
+                  },
                 ),
               if (dash.alertesMaintenance > 0)
                 _AlerteChip(
                   icon: Icons.build,
                   label: '${dash.alertesMaintenance} maintenance(s)',
                   color: Colors.orange,
+                  onTap: () => _showMaintenanceArticles(context),
                 ),
               if (dash.alertesStock > 0)
                 _AlerteChip(
                   icon: Icons.inventory_2,
                   label: '${dash.alertesStock} stock bas',
                   color: Colors.red,
+                  onTap: () => _showLowStockArticles(context),
                 ),
             ],
           ),
@@ -867,20 +1021,23 @@ class _AlerteChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
+  final VoidCallback? onTap;
   const _AlerteChip({
     required this.icon,
     required this.label,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Chip(
+    return ActionChip(
       avatar: Icon(icon, size: 14, color: color),
       label: Text(label, style: const TextStyle(fontSize: 11)),
       backgroundColor: color.withValues(alpha: 0.1),
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
+      onPressed: onTap,
     );
   }
 }

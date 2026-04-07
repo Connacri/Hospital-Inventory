@@ -111,10 +111,29 @@ class BonDotationProvider extends ChangeNotifier {
   final _store = ObjectBoxStore.instance;
 
   List<BonDotationEntity> _bons = [];
+  String _searchQuery = '';
   bool _isLoading = false;
 
-  List<BonDotationEntity> get bons => _bons;
+  List<BonDotationEntity> get bons {
+    if (_searchQuery.isEmpty) return _bons;
+    final q = _searchQuery.toLowerCase();
+    return _bons.where((b) {
+      final service = ObjectBoxStore.instance.services
+          .query(ServiceHopitalEntity_.uuid.equals(b.serviceDemandeurUuid))
+          .build()
+          .findFirst();
+      return b.numeroBd.toLowerCase().contains(q) ||
+          (service?.libelle.toLowerCase().contains(q) ?? false) ||
+          (b.motif?.toLowerCase().contains(q) ?? false);
+    }).toList();
+  }
+
   bool get isLoading => _isLoading;
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
 
   void loadAll() {
     _isLoading = true;
@@ -289,15 +308,26 @@ class BonDotationListScreen extends StatefulWidget {
 }
 
 class _BonDotationListScreenState extends State<BonDotationListScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      context.read<BonDotationProvider>().setSearchQuery(_searchController.text);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<BonDotationProvider>().loadAll();
         context.read<AdminProvider>().loadAll();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -311,68 +341,92 @@ class _BonDotationListScreenState extends State<BonDotationListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => provider.loadAll(),
+            onPressed: () {
+              _searchController.clear();
+              provider.loadAll();
+            },
           ),
         ],
       ),
-      body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : provider.bons.isEmpty
-          ? _buildEmptyState()
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: provider.bons.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final b = provider.bons[i];
-                final service = ObjectBoxStore.instance.services
-                    .query(
-                      ServiceHopitalEntity_.uuid.equals(b.serviceDemandeurUuid),
-                    )
-                    .build()
-                    .findFirst();
-
-                return Card(
-                  child: ListTile(
-                    leading: _StatusBadge(status: b.statut),
-                    title: Text(
-                      b.numeroBd,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      '${(service?.libelle ?? "Service inconnu").toTitleCase()} • ${fmt.format(b.dateDemande)}',
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (b.statut == 'en_attente') ...[
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit_outlined,
-                              color: Colors.blue,
-                              size: 20,
-                            ),
-                            onPressed: () => _openEdit(b),
-                            tooltip: 'Modifier',
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                              size: 20,
-                            ),
-                            onPressed: () => _confirmDelete(context, b),
-                            tooltip: 'Supprimer',
-                          ),
-                        ],
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
-                    onTap: () => _showDetail(b, service),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SearchBar(
+              controller: _searchController,
+              hintText: 'Rechercher par numéro, service ou motif...',
+              leading: const Icon(Icons.search),
+              trailing: [
+                if (_searchController.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => _searchController.clear(),
                   ),
-                ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
-              },
+              ],
             ),
+          ),
+          Expanded(
+            child: provider.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : provider.bons.isEmpty
+                ? _buildEmptyState()
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: provider.bons.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final b = provider.bons[i];
+                      final service = ObjectBoxStore.instance.services
+                          .query(
+                            ServiceHopitalEntity_.uuid.equals(b.serviceDemandeurUuid),
+                          )
+                          .build()
+                          .findFirst();
+
+                      return Card(
+                        child: ListTile(
+                          leading: _StatusBadge(status: b.statut),
+                          title: Text(
+                            b.numeroBd,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${(service?.libelle ?? "Service inconnu").toTitleCase()} • ${fmt.format(b.dateDemande)}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (b.statut == 'en_attente') ...[
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _openEdit(b),
+                                  tooltip: 'Modifier',
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.redAccent,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _confirmDelete(context, b),
+                                  tooltip: 'Supprimer',
+                                ),
+                              ],
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          onTap: () => _showDetail(b, service),
+                        ),
+                      ).animate().fadeIn(delay: Duration(milliseconds: i * 20));
+                    },
+                  ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(context),
         icon: const Icon(Icons.add_task),

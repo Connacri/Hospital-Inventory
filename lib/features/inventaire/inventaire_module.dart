@@ -5,9 +5,7 @@
 
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
-import 'package:mobile_scanner/mobile_scanner.dart' hide Barcode;
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -16,6 +14,7 @@ import '../../../core/auth/auth_provider.dart';
 import '../../../core/objectbox/entities.dart';
 import '../../../core/objectbox/objectbox_store.dart';
 import '../../../core/services/numero_generator.dart';
+import '../../core/extensions/string_extensions.dart';
 import '../../core/repositories/base_repository.dart';
 import '../../objectbox.g.dart';
 
@@ -38,9 +37,40 @@ class InventaireRepository extends BaseRepository<ArticleInventaireEntity> {
   @override
   List<ArticleInventaireEntity> getAll() => box
       .query(ArticleInventaireEntity_.isDeleted.equals(false))
-      .order(ArticleInventaireEntity_.createdAt, flags: Order.descending)
+      .order(ArticleInventaireEntity_.updatedAt, flags: Order.descending)
       .build()
       .find();
+
+  List<ArticleInventaireEntity> search(String query) {
+    if (query.isEmpty) return getAll();
+    final q = query.toLowerCase();
+
+    // On récupère les articles dont le N° inventaire ou S/N matchent
+    Condition<ArticleInventaireEntity> condition =
+        ArticleInventaireEntity_.isDeleted.equals(false) &
+            (ArticleInventaireEntity_.numeroInventaire
+                    .contains(q, caseSensitive: false) |
+                ArticleInventaireEntity_.numeroSerieOrigine
+                    .contains(q, caseSensitive: false));
+
+    // Pour la désignation, on doit faire un filtre manuel car c'est une relation
+    // (Ou alors on récupère tous les IDs d'articles dont la désignation matche)
+    final articlesMatching = ObjectBoxStore.instance.articles
+        .query(ArticleEntity_.designation.contains(q, caseSensitive: false))
+        .build()
+        .find();
+
+    if (articlesMatching.isNotEmpty) {
+      final uuids = articlesMatching.map((a) => a.uuid).toList();
+      condition = condition | ArticleInventaireEntity_.articleUuid.oneOf(uuids);
+    }
+
+    return box
+        .query(condition)
+        .order(ArticleInventaireEntity_.updatedAt, flags: Order.descending)
+        .build()
+        .find();
+  }
 
   List<ArticleInventaireEntity> getByService(String serviceUuid) => box
       .query(
@@ -200,21 +230,37 @@ class InventaireProvider extends ChangeNotifier {
   List<ArticleInventaireEntity> _articles = [];
   bool _isLoading = false;
   String _filterStatut = 'tous';
+  String _searchQuery = '';
 
   List<ArticleInventaireEntity> get articles => _articles;
   bool get isLoading => _isLoading;
+  String get filterStatut => _filterStatut;
 
   void loadAll() {
     _isLoading = true;
-    _articles = _filterStatut == 'tous'
-        ? _repo.getAll()
-        : _repo.getByStatut(_filterStatut);
+    
+    if (_searchQuery.isNotEmpty) {
+      _articles = _repo.search(_searchQuery);
+      if (_filterStatut != 'tous') {
+        _articles = _articles.where((a) => a.statut == _filterStatut).toList();
+      }
+    } else {
+      _articles = _filterStatut == 'tous'
+          ? _repo.getAll()
+          : _repo.getByStatut(_filterStatut);
+    }
+    
     _isLoading = false;
     notifyListeners();
   }
 
   void setFilter(String statut) {
     _filterStatut = statut;
+    loadAll();
+  }
+
+  void search(String query) {
+    _searchQuery = query;
     loadAll();
   }
 
@@ -406,12 +452,20 @@ class InventaireListScreen extends StatefulWidget {
 }
 
 class _InventaireListScreenState extends State<InventaireListScreen> {
+  final _searchCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => context.read<InventaireProvider>().loadAll(),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -424,7 +478,7 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
         title: const Text('Inventaire Physique'),
         actions: [
           DropdownButton<String>(
-            value: provider._filterStatut,
+            value: provider.filterStatut,
             items: ['tous', 'en_stock', 'affecte', 'en_maintenance', 'reforme']
                 .map(
                   (s) => DropdownMenuItem(
@@ -443,6 +497,31 @@ class _InventaireListScreenState extends State<InventaireListScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Rechercher N° Inv, S/N ou désignation...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          provider.search('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: provider.search,
+            ),
+          ),
           _InventaireKpiBarre(articles: provider.articles, store: store),
           Expanded(
             child: provider.isLoading
@@ -502,7 +581,7 @@ class _InventaireKpiBarre extends StatelessWidget {
           ),
           _KpiItem(
             label: 'VALEUR',
-            value: '{(valeur / 1000).toStringAsFixed(1)}K',
+            value: '${(valeur / 1000).toStringAsFixed(1)}K',
             icon: Icons.euro,
             color: Colors.purple,
           ),
@@ -600,7 +679,7 @@ class _ArticleInventaireTile extends StatelessWidget {
 
                     // Désignation (important)
                     Text(
-                      art?.designation ?? "Article inconnu",
+                      (art?.designation ?? "Article inconnu").toTitleCase(),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -622,7 +701,7 @@ class _ArticleInventaireTile extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            srv?.libelle ?? "EN STOCK",
+                            (srv?.libelle ?? "EN STOCK").toTitleCase(),
                             style: const TextStyle(
                               fontSize: 13,
                               color: Colors.grey,
@@ -658,7 +737,6 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final store = ObjectBoxStore.instance;
 
     final art = store.articles
@@ -753,7 +831,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
                 ),
 
                 Text(
-                  art?.designation ?? 'Article inconnu',
+                  (art?.designation ?? 'Article inconnu').toTitleCase(),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.grey.shade700,
                     fontSize: 13,
@@ -825,13 +903,18 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
         .build()
         .findFirst()
         : null;
+    final art = store.articles
+        .query(ArticleEntity_.uuid.equals(a.articleUuid))
+        .build()
+        .findFirst();
     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // _InfoRow('ID Unique', a.uuid),
+            _InfoRow('Désignation', (art?.designation ?? 'N/A').toTitleCase()),
+            _InfoRow('Fournisseur', art?.fournisseurs.map((f) => f.raisonSociale).join(', ') ?? 'N/A'),
             _InfoRow('Numéro Série', a.numeroSerieOrigine ?? 'N/A'),
             _InfoRow('Numéro Inventaire', a.numeroInventaire ?? 'N/A'),
             _InfoRow('État', a.etatPhysique.toUpperCase()),
@@ -847,9 +930,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
               'VNC',
               '${a.valeurNetteComptable?.toStringAsFixed(2) ?? "0"} DA',
             ),
-           // _InfoRow('Localisation', a.serviceUuid ?? 'Non définie'),
-
-            _InfoRow('Affecté à', srv?.libelle ?? "EN STOCK"),
+            _InfoRow('Affecté à', (srv?.libelle ?? "EN STOCK").toTitleCase()),
           ],
         ),
       ),
@@ -857,26 +938,51 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
   }
 
   Widget _barCodeCard(ArticleInventaireEntity a) {
+    final store = ObjectBoxStore.instance;
+    final art = store.articles
+        .query(ArticleEntity_.uuid.equals(a.articleUuid))
+        .build()
+        .findFirst();
+
     return Card(
       elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            const Text(
+              'CHU ORAN',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 12),
             BarcodeWidget(
               barcode: Barcode.code128(), // 🔥 standard robuste
               data: a.numeroInventaire,
               width: 400,
               height: 80,
+              drawText: false,
             ),
-
+            const SizedBox(height: 4),
+            Text(
+              a.numeroInventaire,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text(
-              'IDENTIFIANT SCANNABLE',
-              style: TextStyle(
-                fontSize: 11,
+            Text(
+              (art?.designation ?? 'Article inconnu').toUpperCase(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 12),
@@ -926,12 +1032,43 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
       return const Center(child: Text('Aucun historique'));
     }
 
+    final store = ObjectBoxStore.instance;
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: mvts.length,
       separatorBuilder: (_, __) => const Divider(),
       itemBuilder: (context, i) {
         final m = mvts[i];
+
+        // Résolution des services
+        ServiceHopitalEntity? sSrc;
+        if (m.serviceSourceUuid != null) {
+          sSrc = store.services
+              .query(ServiceHopitalEntity_.uuid.equals(m.serviceSourceUuid!))
+              .build()
+              .findFirst();
+        }
+
+        ServiceHopitalEntity? sDest;
+        if (m.serviceDestUuid != null) {
+          sDest = store.services
+              .query(ServiceHopitalEntity_.uuid.equals(m.serviceDestUuid!))
+              .build()
+              .findFirst();
+        }
+
+        final sourceLabel = sSrc?.libelle.toUpperCase() ?? "STOCK";
+        final destLabel = sDest?.libelle.toUpperCase() ?? "STOCK";
+
+        String destDetails = '';
+        if (sDest != null) {
+          final parts = [
+            if (sDest.batiment != null) 'Bât: ${sDest.batiment}',
+            if (sDest.etage != null) 'Étage: ${sDest.etage}',
+          ];
+          if (parts.isNotEmpty) destDetails = ' (${parts.join(", ")})';
+        }
 
         return ListTile(
           leading: CircleAvatar(
@@ -942,8 +1079,36 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
             m.typeMouvement.toUpperCase(),
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(m.createdAt)),
-          trailing: Text(m.statutApres ?? ''),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(DateFormat('dd/MM/yyyy HH:mm').format(m.createdAt)),
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  '$sourceLabel ➔ $destLabel$destDetails',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.blueGrey,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (sDest?.responsable != null)
+                Text(
+                  'Responsable: ${sDest!.responsable}',
+                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                ),
+            ],
+          ),
+          trailing: Text(
+            (m.statutApres ?? '').toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade600,
+            ),
+          ),
         );
       },
     );
@@ -1018,7 +1183,7 @@ class ArticleInventaireDetailDialog extends StatelessWidget {
             shrinkWrap: true,
             itemCount: services.length,
             itemBuilder: (_, i) => ListTile(
-              title: Text(services[i].libelle),
+              title: Text(services[i].libelle.toTitleCase()),
               onTap: () {
                 final user = context.read<AuthProvider>().currentUser;
 

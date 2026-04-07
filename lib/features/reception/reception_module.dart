@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/extensions/string_extensions.dart';
 import '../../core/objectbox/entities.dart';
 import '../../core/objectbox/objectbox_store.dart';
 import '../../core/repositories/base_repository.dart';
@@ -121,9 +122,27 @@ class BonCommandeProvider extends ChangeNotifier {
 
   List<BonCommandeEntity> _bons = [];
   bool _isLoading = false;
+  String _searchQuery = '';
 
-  List<BonCommandeEntity> get bons => _bons;
+  List<BonCommandeEntity> get bons {
+    if (_searchQuery.isEmpty) return _bons;
+    final q = _searchQuery.toLowerCase();
+    return _bons.where((b) {
+      final f = ObjectBoxStore.instance.fournisseurs
+          .query(FournisseurEntity_.uuid.equals(b.fournisseurUuid))
+          .build()
+          .findFirst();
+      return b.numeroBc.toLowerCase().contains(q) ||
+          (f?.raisonSociale.toLowerCase().contains(q) ?? false);
+    }).toList();
+  }
+
   bool get isLoading => _isLoading;
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
 
   void loadAll() {
     _isLoading = true;
@@ -145,9 +164,28 @@ class FactureProvider extends ChangeNotifier {
 
   List<FactureEntity> _factures = [];
   bool _isLoading = false;
+  String _searchQuery = '';
 
-  List<FactureEntity> get factures => _factures;
+  List<FactureEntity> get factures {
+    if (_searchQuery.isEmpty) return _factures;
+    final q = _searchQuery.toLowerCase();
+    return _factures.where((f) {
+      final fournisseur = ObjectBoxStore.instance.fournisseurs
+          .query(FournisseurEntity_.uuid.equals(f.fournisseurUuid))
+          .build()
+          .findFirst();
+      return f.numeroFacture.toLowerCase().contains(q) ||
+          f.numeroInterne.toLowerCase().contains(q) ||
+          (fournisseur?.raisonSociale.toLowerCase().contains(q) ?? false);
+    }).toList();
+  }
+
   bool get isLoading => _isLoading;
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
 
   void loadAll() {
     _isLoading = true;
@@ -1219,6 +1257,8 @@ class FacturesListScreen extends StatefulWidget {
 }
 
 class _FacturesListScreenState extends State<FacturesListScreen> {
+  final _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -1228,6 +1268,12 @@ class _FacturesListScreenState extends State<FacturesListScreen> {
         context.read<BonCommandeProvider>().loadAll();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1244,10 +1290,45 @@ class _FacturesListScreenState extends State<FacturesListScreen> {
             ],
           ),
         ),
-        body: const TabBarView(
+        body: Column(
           children: [
-            _FactureSubList(),
-            _BonCommandeSubList(),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Builder(builder: (context) {
+                final tabController = DefaultTabController.of(context);
+                return SearchBar(
+                  controller: _searchController,
+                  hintText: 'Rechercher par numéro ou fournisseur...',
+                  leading: const Icon(Icons.search),
+                  onChanged: (v) {
+                    if (tabController.index == 0) {
+                      context.read<FactureProvider>().setSearchQuery(v);
+                    } else {
+                      context.read<BonCommandeProvider>().setSearchQuery(v);
+                    }
+                  },
+                  trailing: [
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          context.read<FactureProvider>().setSearchQuery('');
+                          context.read<BonCommandeProvider>().setSearchQuery('');
+                        },
+                      ),
+                  ],
+                );
+              }),
+            ),
+            const Expanded(
+              child: TabBarView(
+                children: [
+                  _FactureSubList(),
+                  _BonCommandeSubList(),
+                ],
+              ),
+            ),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -1331,7 +1412,7 @@ class _FactureSubList extends StatelessWidget {
               ],
             ),
             subtitle: Text(
-              '${fournisseur?.raisonSociale ?? "Fournisseur inconnu"} • ${fmt.format(f.dateFacture)}',
+              '${(fournisseur?.raisonSociale ?? "Fournisseur inconnu").toTitleCase()} • ${fmt.format(f.dateFacture)}',
             ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1381,7 +1462,7 @@ class _BonCommandeSubList extends StatelessWidget {
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.shopping_cart)),
             title: Text(b.numeroBc, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('${f?.raisonSociale ?? "—"} • ${fmt.format(b.dateBc)}'),
+            subtitle: Text('${(f?.raisonSociale ?? "—").toTitleCase()} • ${fmt.format(b.dateBc)}'),
             trailing: Text('${b.montantTotal.toStringAsFixed(0)} DA', style: const TextStyle(fontWeight: FontWeight.bold)),
             onTap: () {},
           ),
