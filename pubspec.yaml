@@ -34,7 +34,7 @@ dependencies:
   connectivity_plus: ^7.1.0
 
   # ── UI / Material 3 ──
-  material_color_utilities: ^0.11.1
+  material_color_utilities: any
   flutter_animate: ^4.5.2
   gap: ^3.0.1
   google_fonts: ^8.0.2
