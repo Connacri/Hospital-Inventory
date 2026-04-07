@@ -1,0 +1,52 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1️⃣ Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup Flutter
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+
+      # 3️⃣ Install deps
+      - run: flutter pub get
+
+      # 4️⃣ Build Windows
+      - run: flutter build windows
+
+      # 5️⃣ Installer Inno Setup
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      # 6️⃣ Compiler installer
+      - name: Build Installer
+        run: |
+          iscc installer/setup.iss
+
+      # 7️⃣ Upload artifact
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/output/*.exe
+
+      # 8️⃣ Release GitHub
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-${{ github.run_number }}
+          name: Windows Build ${{ github.run_number }}
+          files: installer/output/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
