@@ -2,6 +2,8 @@
 
 A new Inventaire project.
 
+[![Build & Release](https://github.com/Connacri/Hospital-Inventory/actions/workflows/build-release.yml/badge.svg)](https://github.com/Connacri/Hospital-Inventory/actions/workflows/build-release.yml)
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
