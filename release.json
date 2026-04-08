@@ -1,0 +1,15 @@
+{
+  "version": "v10",
+  "tag": "v10",
+  "date": "2026-04-08T11:02:47Z",
+  "platforms": {
+    "android": {
+      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v10/app-release.apk",
+      "name": "app-release.apk"
+    },
+    "windows": {
+      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v10/installer.exe",
+      "name": "installer.exe"
+    }
+  }
+}
