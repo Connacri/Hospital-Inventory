@@ -9,6 +9,15 @@ Une solution complète et performante pour la gestion des stocks hospitaliers. C
 
 ---
 
+## 🔑 Accès Démo (Test)
+
+Vous pouvez tester les fonctionnalités de l'application en utilisant les identifiants suivants :
+
+> 🆔 **Matricule :** `beta`  
+> 🔑 **Mot de passe :** `beta`
+
+---
+
 ## 📥 Téléchargements
 
 Sélectionnez le lien correspondant à votre appareil pour installer l'application :
