@@ -1,14 +1,14 @@
 {
-  "version": "v11",
-  "tag": "v11",
-  "date": "2026-04-08T11:22:00Z",
+  "version": "v13",
+  "tag": "v13",
+  "date": "2026-04-08T12:29:07Z",
   "platforms": {
     "android": {
-      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v11/app-release.apk",
+      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v13/app-release.apk",
       "name": "app-release.apk"
     },
     "windows": {
-      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v11/installer.exe",
+      "url": "https://github.com/Connacri/Hospital-Inventory/releases/download/v13/installer.exe",
       "name": "installer.exe"
     }
   }
