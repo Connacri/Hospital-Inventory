@@ -3,6 +3,8 @@ name: Build multiplateforme & Release
 on:
   push:
     branches: [ master ]
+    paths-ignore:
+      - 'release.json'   # évite la boucle infinie après le commit du bot
 
 permissions:
   contents: write
@@ -94,6 +96,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
+          name: "Release v${{ github.run_number }}"
           files: |
             app-release.apk
             installer.exe
@@ -102,9 +105,11 @@ jobs:
 
       - name: Générer release.json
         run: |
-          echo '{
+          cat > release.json << EOF
+          {
             "version": "v${{ github.run_number }}",
             "tag": "v${{ github.run_number }}",
+            "date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "android": {
                 "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/app-release.apk",
@@ -115,14 +120,15 @@ jobs:
                 "name": "installer.exe"
               }
             }
-          }' > release.json
+          }
+          EOF
 
       - name: Commit release.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add release.json
-          git commit -m "MAJ release.json v${{ github.run_number }}" || true
-          git push origin master || true
+          git commit -m "MAJ release.json v${{ github.run_number }}" || echo "Rien à commiter"
+          git push origin master || echo "Push ignoré"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
