@@ -6,6 +6,7 @@
 
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- UTILISATEURS & RÔLES
@@ -258,7 +259,7 @@ CREATE TABLE IF NOT EXISTS bons_dotation (
   service_demandeur_uuid  UUID NOT NULL,
   date_demande            TIMESTAMPTZ DEFAULT now(),
   date_dotation           TIMESTAMPTZ,
-  statut                  TEXT CHECK (statut IN ('demande','approuve','partiellement_livre','livre','rejete')) DEFAULT 'demande',
+  statut                  TEXT CHECK (statut IN ('demande','approuve','partiellement_livre','livre','rejete','en_attente','partiel','termine')) DEFAULT 'en_attente',
   motif                   TEXT,
   approuve_par_uuid       UUID,
   created_by_uuid         UUID,
@@ -272,7 +273,8 @@ CREATE TABLE IF NOT EXISTS lignes_dotation (
   id                    BIGSERIAL PRIMARY KEY,
   uuid                  UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
   bon_dotation_uuid     UUID NOT NULL,
-  article_uuid          UUID NOT NULL,
+  article_uuid          UUID,
+  article_designation_hors_catalogue TEXT,
   quantite_demandee     INTEGER NOT NULL DEFAULT 1,
   quantite_attribuee    INTEGER DEFAULT 0,
   is_deleted            BOOLEAN DEFAULT false,
@@ -324,9 +326,19 @@ CREATE TABLE IF NOT EXISTS historique_mouvements (
 
 CREATE INDEX IF NOT EXISTS idx_utilisateurs_updated ON utilisateurs(updated_at);
 CREATE INDEX IF NOT EXISTS idx_fournisseurs_updated ON fournisseurs(updated_at);
+CREATE INDEX IF NOT EXISTS idx_categories_updated ON categories_article(updated_at);
 CREATE INDEX IF NOT EXISTS idx_articles_updated ON articles(updated_at);
+CREATE INDEX IF NOT EXISTS idx_services_updated ON services_hopital(updated_at);
+CREATE INDEX IF NOT EXISTS idx_articles_fournisseurs_updated ON articles_fournisseurs(updated_at);
+CREATE INDEX IF NOT EXISTS idx_bons_commande_updated ON bons_commande(updated_at);
+CREATE INDEX IF NOT EXISTS idx_factures_updated ON factures(updated_at);
+CREATE INDEX IF NOT EXISTS idx_lignes_facture_updated ON lignes_facture(updated_at);
+CREATE INDEX IF NOT EXISTS idx_fiches_reception_updated ON fiches_reception(updated_at);
+CREATE INDEX IF NOT EXISTS idx_lignes_reception_updated ON lignes_reception(updated_at);
 CREATE INDEX IF NOT EXISTS idx_articles_inv_updated ON articles_inventaire(updated_at);
 CREATE INDEX IF NOT EXISTS idx_articles_inv_numero ON articles_inventaire(numero_inventaire);
+CREATE INDEX IF NOT EXISTS idx_bons_dotation_updated ON bons_dotation(updated_at);
+CREATE INDEX IF NOT EXISTS idx_lignes_dotation_updated ON lignes_dotation(updated_at);
 CREATE INDEX IF NOT EXISTS idx_affectations_updated ON affectations(updated_at);
 CREATE INDEX IF NOT EXISTS idx_historique_updated ON historique_mouvements(updated_at);
 CREATE INDEX IF NOT EXISTS idx_historique_article ON historique_mouvements(article_inventaire_uuid);

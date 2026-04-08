@@ -3,17 +3,28 @@ name: Build multiplateforme & Release
 on:
   push:
     branches: [ master ]
+
 permissions:
   contents: write
   issues: read
   pull-requests: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
       - run: flutter pub get
+
+      - name: Install ObjectBox native library
+        run: bash <(curl -s https://raw.githubusercontent.com/objectbox/objectbox-dart/main/install.sh) --quiet
+
       - run: flutter test
 
   build-android:
@@ -21,11 +32,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
       - run: flutter pub get
+
       - run: flutter build apk --release
+
       - uses: actions/upload-artifact@v4
         with:
           name: app-release.apk
@@ -36,13 +53,21 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.5'
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
       - run: flutter pub get
+
       - run: flutter build windows
+
       - run: choco install innosetup -y
+
       - run: iscc installer/setup.iss
+
       - uses: actions/upload-artifact@v4
         with:
           name: installer.exe
@@ -82,10 +107,12 @@ jobs:
             "tag": "v${{ github.run_number }}",
             "platforms": {
               "android": {
-                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/app-release.apk"
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/app-release.apk",
+                "name": "app-release.apk"
               },
               "windows": {
-                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/installer.exe"
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/installer.exe",
+                "name": "installer.exe"
               }
             }
           }' > release.json

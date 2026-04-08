@@ -981,7 +981,7 @@ class LigneDotationEntity {
   Map<String, dynamic> toSupabaseMap() => {
     'uuid': uuid,
     'bon_dotation_uuid': bonDotationUuid,
-    'article_uuid': articleUuid,
+    'article_uuid': articleUuid.isEmpty ? null : articleUuid,
     'article_designation_hors_catalogue': articleDesignationHorsCatalogue,
     'quantite_demandee': quantiteDemandee,
     'quantite_attribuee': quantiteAttribuee,
