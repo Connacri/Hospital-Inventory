@@ -140,12 +140,12 @@ class DashboardProvider extends ChangeNotifier {
     // Conflits sync
     conflitsPending = ConflictDetector.instance.pendingCount;
 
-    // Alertes stock
+    // Alertes stock (Rupture ou sous le minimum)
     alertesStock = _store.articles
         .query(ArticleEntity_.isDeleted.equals(false))
         .build()
         .find()
-        .where((a) => a.stockActuel <= a.stockMinimum && a.stockMinimum > 0)
+        .where((a) => a.stockActuel <= 0 || (a.stockMinimum > 0 && a.stockActuel <= a.stockMinimum))
         .length;
 
     // Top services par nombre d'articles affectés
@@ -567,68 +567,120 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 void _showLowStockArticles(BuildContext context) {
   final store = ObjectBoxStore.instance;
-  final lowStockItems = store.articles
+  final allArticles = store.articles
       .query(ArticleEntity_.isDeleted.equals(false))
       .build()
-      .find()
-      .where((a) => a.stockActuel <= a.stockMinimum && a.stockMinimum > 0)
+      .find();
+
+  // On sépare en deux listes
+  final stockZero = allArticles.where((a) => a.stockActuel <= 0).toList();
+  final stockLow = allArticles
+      .where((a) => a.stockActuel > 0 && a.stockMinimum > 0 && a.stockActuel <= a.stockMinimum)
       .toList();
 
   showDialog(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Row(
-        children: [
-          const Icon(Icons.warning, color: Colors.red),
-          const SizedBox(width: 12),
-          const Text('Articles en stock bas'),
+    builder: (ctx) => DefaultTabController(
+      length: 2,
+      child: AlertDialog(
+        titlePadding: EdgeInsets.zero,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning, color: Colors.red),
+                  const SizedBox(width: 12),
+                  const Text('Alertes Stock'),
+                ],
+              ),
+            ),
+            const TabBar(
+              labelColor: Colors.red,
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Colors.red,
+              indicatorWeight: 3,
+              tabs: [
+                Tab(text: 'Stock 0'),
+                Tab(text: 'Stock Minimum'),
+              ],
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          height: 400,
+          child: TabBarView(
+            children: [
+              _buildStockAlertList(context, stockZero, 'Aucun article en rupture de stock'),
+              _buildStockAlertList(context, stockLow, 'Aucun article sous le seuil minimum'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fermer'),
+          ),
         ],
       ),
-      content: SizedBox(
-        width: 500,
-        height: 400,
-        child: lowStockItems.isEmpty
-            ? const Center(child: Text('Aucun article en stock bas'))
-            : ListView.separated(
-                itemCount: lowStockItems.length,
-                separatorBuilder: (_, __) => const Divider(),
-                itemBuilder: (ctx, i) {
-                  final art = lowStockItems[i];
-                  return ListTile(
-                    title: Text(art.designation, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Code: ${art.codeArticle}'),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Stock: ${art.stockActuel}',
-                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Min: ${art.stockMinimum}',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      showDialog(
-                        context: context,
-                        builder: (_) => ArticleDetailDialog(article: art),
-                      );
-                    },
-                  );
-                },
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Fermer'),
-        ),
-      ],
     ),
+  );
+}
+
+Widget _buildStockAlertList(BuildContext context, List<ArticleEntity> items, String emptyMsg) {
+  if (items.isEmpty) {
+    return Center(
+      child: Text(
+        emptyMsg,
+        style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+      ),
+    );
+  }
+
+  return ListView.separated(
+    padding: const EdgeInsets.only(top: 8),
+    itemCount: items.length,
+    separatorBuilder: (_, __) => const Divider(),
+    itemBuilder: (ctx, i) {
+      final art = items[i];
+      final isZero = art.stockActuel <= 0;
+
+      return ListTile(
+        title: Text(
+          art.designation,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text('Code: ${art.codeArticle}'),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              'Stock: ${art.stockActuel}',
+              style: TextStyle(
+                color: isZero ? Colors.red : Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (art.stockMinimum > 0)
+              Text(
+                'Min: ${art.stockMinimum}',
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+          ],
+        ),
+        onTap: () {
+          Navigator.pop(context);
+          showDialog(
+            context: context,
+            builder: (_) => ArticleDetailDialog(article: art),
+          );
+        },
+      );
+    },
   );
 }
 

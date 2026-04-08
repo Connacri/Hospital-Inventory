@@ -45,7 +45,7 @@ class CategorieRepository extends BaseRepository<CategorieArticleEntity> {
   CategorieRepository() : super(box: ObjectBoxStore.instance.categories, tableName: 'categories_article');
 
   @override CategorieArticleEntity? getByUuid(String uuid) => box.query(CategorieArticleEntity_.uuid.equals(uuid)).build().findFirst();
-  @override List<CategorieArticleEntity> getAll() => box.query(CategorieArticleEntity_.isDeleted.equals(false)).order(CategorieArticleEntity_.libelle).build().find();
+  @override List<CategorieArticleEntity> getAll() => box.query(CategorieArticleEntity_.isDeleted.equals(false)).order(CategorieArticleEntity_.updatedAt, flags: Order.descending).build().find();
 
   @override String getUuid(CategorieArticleEntity e) => e.uuid;
   @override void setUuid(CategorieArticleEntity e, String v) => e.uuid = v;
@@ -64,7 +64,7 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
 
   @override ArticleEntity? getByUuid(String uuid) => box.query(ArticleEntity_.uuid.equals(uuid)).build().findFirst();
   @override List<ArticleEntity> getAll() => box.query(ArticleEntity_.isDeleted.equals(false).and(ArticleEntity_.actif.equals(true)))
-      .order(ArticleEntity_.createdAt, flags: Order.descending)
+      .order(ArticleEntity_.updatedAt, flags: Order.descending)
       .build().find();
 
   List<ArticleEntity> search(String q) {
@@ -73,7 +73,9 @@ class ArticleRepository extends BaseRepository<ArticleEntity> {
       ArticleEntity_.designation.contains(q, caseSensitive: false)
       .or(ArticleEntity_.codeArticle.contains(q, caseSensitive: false))
       .or(ArticleEntity_.codeGtin.contains(q, caseSensitive: false))
-    )).build().find();
+    ))
+    .order(ArticleEntity_.updatedAt, flags: Order.descending)
+    .build().find();
   }
 
   Future<ArticleEntity> create({required String designation, required String categorieUuid, List<String> fournisseurUuids = const [], String? madeIn, String? description, String uniteMesure = 'unité', String? codeGtin, double prixUnitaireMoyen = 0, int stockMinimum = 0, bool estSerialise = false}) async {
@@ -333,6 +335,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
   bool _estSerialise = true, _isSaving = false;
   final List<TextEditingController> _serialCtrls = [];
   List<String?> _serials = [];
+  int _initialStock = 0;
 
   @override
   void initState() {
@@ -346,6 +349,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     _prix = TextEditingController(text: e?.prixUnitaireMoyen.toStringAsFixed(0));
     _stockMin = TextEditingController(text: e?.stockMinimum.toString() ?? '0');
     _stockActuel = TextEditingController(text: e?.stockActuel.toString() ?? '0');
+    _initialStock = e?.stockActuel ?? 0;
     _quantiteInitiale = TextEditingController(text: '0');
     _catUuid = e?.categorieUuid;
     
@@ -432,7 +436,7 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
               const SizedBox(width: 16),
               Expanded(child: TextFormField(controller: _stockMin, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock Minimum', prefixIcon: Icon(Icons.warning_amber_rounded)))),
               const SizedBox(width: 16),
-              Expanded(child: TextFormField(controller: _stockActuel, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Stock Actuel', prefixIcon: const Icon(Icons.warehouse_outlined), enabled: !isEdit))),
+              Expanded(child: TextFormField(controller: _stockActuel, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Stock Actuel', prefixIcon: Icon(Icons.warehouse_outlined)))),
             ]),
             if (!isEdit) ...[
               const SizedBox(height: 24),
@@ -478,6 +482,71 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
     }
   }
 
+  Future<List<String?>?> _promptForSerials(int count) async {
+    final controllers = List.generate(count, (_) => TextEditingController());
+    List<String?> serials = List.filled(count, null);
+
+    return showDialog<List<String?>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nouvelles Unités Détectées'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: _MedPalette.primaryContainer, borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    const Icon(Icons.info_outline, color: _MedPalette.primary),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text('Vous augmentez le stock de $count unité(s). Veuillez renseigner les informations de traçabilité pour ces nouveaux articles.', style: const TextStyle(fontSize: 13))),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+                Row(children: [
+                  const Text('Numéros de série', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  if (_estSerialise) TextButton.icon(
+                    onPressed: () async {
+                      final res = await showDialog<List<String>>(context: context, builder: (_) => ContinuousScannerDialog(count: count));
+                      if (res != null) {
+                        for (int i = 0; i < res.length && i < controllers.length; i++) {
+                          controllers[i].text = res[i];
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Scan continu'),
+                  )
+                ]),
+                const SizedBox(height: 12),
+                SerialFieldsGenerator(
+                  quantite: count,
+                  designation: _designation.text.isEmpty ? 'Produit' : _designation.text,
+                  estSerialise: _estSerialise,
+                  externalControllers: controllers,
+                  onChanged: (s) => serials = s,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, serials),
+            style: FilledButton.styleFrom(backgroundColor: _MedPalette.primary),
+            child: const Text('Confirmer & Générer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
@@ -491,7 +560,27 @@ class _ArticleFormDialogState extends State<ArticleFormDialog> {
         final q = int.tryParse(_quantiteInitiale.text) ?? 0;
         if (q > 0) await invProv.creerBatch(articleUuid: a.uuid, ficheReceptionUuid: const Uuid().v4(), ligneReceptionUuid: const Uuid().v4(), quantite: q, serials: _serials, valeurUnitaire: double.tryParse(_prix.text) ?? 0, createdByUuid: auth.currentUser?.uuid ?? '');
       } else {
-        final a = widget.existing!..designation = _designation.text.trim()..categorieUuid = _catUuid..madeIn = _madeIn.text.trim()..prixUnitaireMoyen = double.tryParse(_prix.text) ?? 0..description = _description.text.trim()..uniteMesure = _unite.text.trim()..codeGtin = _gtin.text.trim()..stockMinimum = int.tryParse(_stockMin.text) ?? 0..estSerialise = _estSerialise;
+        final currentStock = int.tryParse(_stockActuel.text) ?? 0;
+        final difference = currentStock - _initialStock;
+
+        if (difference > 0) {
+          final serialsForNew = await _promptForSerials(difference);
+          if (serialsForNew == null) {
+            setState(() => _isSaving = false);
+            return;
+          }
+          await invProv.creerBatch(
+            articleUuid: widget.existing!.uuid,
+            ficheReceptionUuid: const Uuid().v4(),
+            ligneReceptionUuid: const Uuid().v4(),
+            quantite: difference,
+            serials: serialsForNew,
+            valeurUnitaire: double.tryParse(_prix.text) ?? 0,
+            createdByUuid: auth.currentUser?.uuid ?? '',
+          );
+        }
+
+        final a = widget.existing!..designation = _designation.text.trim()..categorieUuid = _catUuid..madeIn = _madeIn.text.trim()..prixUnitaireMoyen = double.tryParse(_prix.text) ?? 0..description = _description.text.trim()..uniteMesure = _unite.text.trim()..codeGtin = _gtin.text.trim()..stockMinimum = int.tryParse(_stockMin.text) ?? 0..estSerialise = _estSerialise..stockActuel = currentStock;
         if (_fourUuids.isNotEmpty) a.fournisseurUuid = _fourUuids.first;
         await artProv.update(a);
         final linkRepo = ArticleFournisseurRepository();

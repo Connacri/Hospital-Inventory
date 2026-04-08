@@ -511,9 +511,17 @@ class FournisseurDetailScreen extends StatefulWidget {
 }
 
 class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
-  late List<FactureEntity> _factures;
+  late List<FactureEntity> _allFactures;
+  List<FactureEntity> _displayedFactures = [];
   late List<ArticleEntity> _articles;
-  bool _isLoading = false; // Plus besoin d'attendre si on charge en synchrone
+  
+  double _totalGlobal = 0;
+  Map<int, double> _statsParAnnee = {};
+  
+  int _currentPage = 1;
+  static const int _pageSize = 15;
+  bool _hasMore = false;
+
   final GlobalKey<ScaffoldState> _detailScaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -526,17 +534,47 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
     final store = ObjectBoxStore.instance;
     final f = widget.fournisseur;
 
-    // Charger les factures de manière synchrone
-    _factures = store.factures
+    // 1. Charger TOUTES les factures pour les stats
+    _allFactures = store.factures
         .query(FactureEntity_.fournisseurUuid.equals(f.uuid)
             .and(FactureEntity_.isDeleted.equals(false)))
         .order(FactureEntity_.dateFacture, flags: Order.descending)
         .build()
         .find();
 
-    // Utiliser la relation ToMany directe pour les articles
-    // Cela évite de requêter manuellement la table de jonction
+    // 2. Calculer les statistiques
+    _totalGlobal = 0;
+    _statsParAnnee = {};
+    for (var fact in _allFactures) {
+      _totalGlobal += fact.montantTtc;
+      int year = fact.dateFacture.year;
+      _statsParAnnee[year] = (_statsParAnnee[year] ?? 0) + fact.montantTtc;
+    }
+
+    // 3. Initialiser la pagination
+    _currentPage = 1;
+    _updateDisplayedFactures();
+
+    // 4. Charger les articles
     _articles = f.articles.where((a) => !a.isDeleted).toList();
+  }
+
+  void _updateDisplayedFactures() {
+    int count = _currentPage * _pageSize;
+    if (count >= _allFactures.length) {
+      _displayedFactures = List.from(_allFactures);
+      _hasMore = false;
+    } else {
+      _displayedFactures = _allFactures.take(count).toList();
+      _hasMore = true;
+    }
+  }
+
+  void _loadMore() {
+    setState(() {
+      _currentPage++;
+      _updateDisplayedFactures();
+    });
   }
 
   @override
@@ -629,41 +667,128 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
   }
 
   Widget _buildFacturesTab(BuildContext context) {
-    if (_factures.isEmpty) {
+    if (_allFactures.isEmpty) {
       return _buildEmptyState(context, 'Aucune facture pour ce fournisseur', Icons.receipt_long_outlined);
     }
 
     final theme = Theme.of(context);
-    final fmt = DateFormat('dd/MM/yyyy');
+    final fmtDate = DateFormat('dd/MM/yyyy');
+    final fmtMoney = NumberFormat('#,###.00', 'fr_FR');
 
-    return ListView.separated(
+    // Trier les années pour l'affichage des stats
+    final anneesTriees = _statsParAnnee.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: _factures.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final fact = _factures[i];
-        return Card(
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-              child: Icon(Icons.receipt, color: theme.colorScheme.primary, size: 20),
+      children: [
+        // ── Résumé financier ──
+        Card(
+          color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.1))),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Total cumulé', style: theme.textTheme.titleSmall),
+                    Text(
+                      '${fmtMoney.format(_totalGlobal)} DA',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Text('Historique par année', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 40,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: anneesTriees.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) {
+                      final year = anneesTriees[i];
+                      final amount = _statsParAnnee[year]!;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('$year : ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            Text('${fmtMoney.format(amount)} DA', style: TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-            title: Text('Facture N° ${fact.numeroFacture}', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Date: ${fmt.format(fact.dateFacture)} • Statut: ${fact.statut.toUpperCase()}'),
-            trailing: Text(
-              '${fact.montantTtc.toStringAsFixed(2)} DA',
-              style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-            ),
-            onTap: () {
-               // Ouvrir le détail de la facture si disponible
-               showDialog(
-                 context: context, 
-                 builder: (_) => FactureDetailDialog(facture: fact)
-               );
-            },
           ),
-        );
-      },
+        ),
+        
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Icon(Icons.list_alt, size: 18),
+            const SizedBox(width: 8),
+            Text('Détails des factures (${_allFactures.length})', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── Liste paginée ──
+        ..._displayedFactures.map((fact) => Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                child: Icon(Icons.receipt, color: theme.colorScheme.primary, size: 20),
+              ),
+              title: Text('Facture N° ${fact.numeroFacture}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Date: ${fmtDate.format(fact.dateFacture)} • Statut: ${fact.statut.toUpperCase()}'),
+              trailing: Text(
+                '${fmtMoney.format(fact.montantTtc)} DA',
+                style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+              ),
+              onTap: () {
+                 showDialog(
+                   context: context, 
+                   builder: (_) => FactureDetailDialog(facture: fact)
+                 );
+              },
+            ),
+          ),
+        )),
+
+        // ── Bouton Pagination ──
+        if (_hasMore)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: _loadMore,
+                icon: const Icon(Icons.add),
+                label: const Text('Voir plus de factures'),
+              ),
+            ),
+          ),
+          
+        const SizedBox(height: 40),
+      ],
     );
   }
 

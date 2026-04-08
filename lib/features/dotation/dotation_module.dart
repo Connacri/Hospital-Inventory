@@ -1027,7 +1027,7 @@ class _BonDotationDetailDialogState extends State<_BonDotationDetailDialog> {
                     _DetailRow('Service Dest.', widget.service?.libelle ?? '—'),
                     _DetailRow('Date B/D', fmt.format(widget.bon.dateDemande)),
                     _DetailRow(
-                      'Date Demande',
+                      'Date Saisi',
                       fmt.format(widget.bon.createdAt),
                     ),
                     if (widget.bon.motif != null &&
@@ -1098,6 +1098,13 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
       designation = "Article Réf. ${widget.ligne.articleUuid.substring(0,8)}";
     }
     final remains = widget.ligne.quantiteDemandee - widget.ligne.quantiteAttribuee;
+    
+    // Si on veut que remain prenne la petite valeur entre quantiteDemandee et stockActuel
+    // (pour ne pas proposer plus que ce qu'on a en stock OU plus que ce qui est demandé)
+    int maxAffectable = remains;
+    if (article != null && article.stockActuel < maxAffectable) {
+      maxAffectable = article.stockActuel;
+    }
 
     // Items déjà affectés pour cette ligne
     // Si la ligne est liée à un article, on cherche les affectations pour cet article dans ce service
@@ -1261,6 +1268,10 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
             ],
             if (remains > 0) ...[
               const Divider(height: 24),
+              if (article != null) ...[
+                _buildArticleInfo(context, article),
+                const SizedBox(height: 16),
+              ],
               if (widget.ligne.articleUuid.isEmpty) ...[
                 const Text(
                   'Associer à un article du catalogue pour affecter:',
@@ -1313,7 +1324,7 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
               ],
               if (widget.ligne.articleUuid.isNotEmpty) ...[
                 Text(
-                  'Sélectionner des unités en stock (max $remains):',
+                  'Sélectionner des unités en stock (max $maxAffectable):',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
@@ -1324,7 +1335,7 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
                   articleUuid: widget.ligne.articleUuid,
                   selectedUuids: _selectedUuids,
                   onChanged: (uuids) {
-                    if (uuids.length <= remains) {
+                    if (uuids.length <= maxAffectable) {
                       setState(() => _selectedUuids = uuids);
                     } else {
                       AppToast.show(
@@ -1341,6 +1352,97 @@ class _LigneDetailWidgetState extends State<_LigneDetailWidget> {
         ),
       ),
     );
+  }
+
+  Widget _buildArticleInfo(BuildContext context, ArticleEntity article) {
+    final store = ObjectBoxStore.instance;
+    final cat = article.categorieUuid != null
+        ? store.categories
+            .query(CategorieArticleEntity_.uuid.equals(article.categorieUuid!))
+            .build()
+            .findFirst()
+        : null;
+
+    final fournisseurs = article.fournisseurs;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blueGrey.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'DÉTAILS ARTICLE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_note, size: 20, color: Colors.blue),
+                onPressed: () => _editArticle(context, article),
+                tooltip: 'Modifier l\'article',
+                constraints: const BoxConstraints(),
+                padding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _InfoRow('Code', article.codeArticle),
+          _InfoRow('Catégorie', cat?.libelle ?? '—'),
+          _InfoRow('Stock Global', '${article.stockActuel} ${article.uniteMesure}'),
+          if (fournisseurs.isNotEmpty)
+            _InfoRow(
+              'Fournisseur(s)',
+              fournisseurs.map((f) => f.raisonSociale).join(', '),
+            ),
+          if (article.description != null && article.description!.isNotEmpty)
+            _InfoRow('Description', article.description!),
+        ],
+      ),
+    );
+  }
+
+  Widget _InfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 85,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+          SizedBox(
+              child:  Text(
+                value,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+              ),
+
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editArticle(BuildContext context, ArticleEntity article) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => ArticleFormDialog(existing: article),
+    );
+    // Rafraîchir l'UI après modification
+    if (mounted) setState(() {});
   }
 
   Future<void> _validerAffectation() async {

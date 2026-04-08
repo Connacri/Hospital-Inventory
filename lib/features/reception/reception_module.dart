@@ -36,7 +36,7 @@ class BonCommandeRepository extends BaseRepository<BonCommandeEntity> {
   @override
   List<BonCommandeEntity> getAll() => box
       .query(BonCommandeEntity_.isDeleted.equals(false))
-      .order(BonCommandeEntity_.dateBc, flags: Order.descending)
+      .order(BonCommandeEntity_.updatedAt, flags: Order.descending)
       .build()
       .find();
 
@@ -73,7 +73,7 @@ class FactureRepository extends BaseRepository<FactureEntity> {
   @override
   List<FactureEntity> getAll() => box
       .query(FactureEntity_.isDeleted.equals(false))
-      .order(FactureEntity_.dateFacture, flags: Order.descending)
+      .order(FactureEntity_.updatedAt, flags: Order.descending)
       .build()
       .find();
 
@@ -81,7 +81,7 @@ class FactureRepository extends BaseRepository<FactureEntity> {
       .query(FactureEntity_.fournisseurUuid
           .equals(fournisseurUuid)
           .and(FactureEntity_.isDeleted.equals(false)))
-      .order(FactureEntity_.dateFacture, flags: Order.descending)
+      .order(FactureEntity_.updatedAt, flags: Order.descending)
       .build()
       .find();
 

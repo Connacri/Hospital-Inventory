@@ -139,6 +139,16 @@ class HopitalInventaireApp extends StatelessWidget {
               textStyle: GoogleFonts.lexend(fontWeight: FontWeight.w500),
             ),
           ),
+
+          // ── CONFIGURATION TABBAR (TITRES EN BLANC) ──
+          tabBarTheme: TabBarThemeData(
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white.withValues(alpha: 0.7),
+            indicatorColor: Colors.white,
+            labelStyle: GoogleFonts.lexend(fontWeight: FontWeight.w600, fontSize: 14),
+            unselectedLabelStyle: GoogleFonts.lexend(fontWeight: FontWeight.w500, fontSize: 14),
+            indicatorSize: TabBarIndicatorSize.tab,
+          ),
         ),
         home: const _RootNavigator(),
       ),
