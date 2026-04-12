@@ -1,12 +1,12 @@
 // lib/main.dart
- ══════════════════════════════════════════════════════════════════════════════
+ //══════════════════════════════════════════════════════════════════════════════
 // POINT D'ENTRÉE — Ordre d'initialisation critique :
 // 1. ObjectBox  (source vérité, toujours dispo)
 // 2. Encryption (dériver clé depuis machine ID)
 // 3. DeviceInfo (ID unique du poste)
 // 4. Supabase   (optionnel — depuis config ObjectBox)
 // 5. Auth Session (restauration session)
- ══════════════════════════════════════════════════════════════════════════════
+ //══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
