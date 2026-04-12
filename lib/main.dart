@@ -1,5 +1,5 @@
 // lib/main.dart
-// ══════════════════════════════════════════════════════════════════════════════
+ ══════════════════════════════════════════════════════════════════════════════
 // POINT D'ENTRÉE — Ordre d'initialisation critique :
 // 1. ObjectBox  (source vérité, toujours dispo)
 // 2. Encryption (dériver clé depuis machine ID)
