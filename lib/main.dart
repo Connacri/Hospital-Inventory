@@ -6,7 +6,7 @@
 // 3. DeviceInfo (ID unique du poste)
 // 4. Supabase   (optionnel — depuis config ObjectBox)
 // 5. Auth Session (restauration session)
-// ══════════════════════════════════════════════════════════════════════════════
+ ══════════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
